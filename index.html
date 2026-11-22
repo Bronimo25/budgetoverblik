@@ -203,6 +203,8 @@
   .undo-toast button{background:var(--accent);color:#fff;padding:.4rem .8rem;font-size:.8rem;border:none;}
 
   .table-card{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow);}
+  /* ---- Tætte måneds-matricer (fx Faste udgifter) — forbliver en rigtig tabel med vandret scroll på mobil, i stedet for at blive "kortificeret" som posteringslisterne ---- */
+  .matrix-scroll{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow-x:auto;box-shadow:var(--shadow);}
 
   /* ---- Foldbare måneds-sektioner i posteringslisten ---- */
   tr.month-header-row td{padding:0;background:var(--bg);border-bottom:1px solid var(--line);}
@@ -252,6 +254,12 @@
   @media (max-width: 720px){
     .bulk-toolbar-inner{gap:.6rem 1rem;}
     .bulk-row input[type=text], .bulk-row select{width:140px;}
+  }
+  @media (max-width: 480px){
+    .bulk-toolbar-inner{flex-direction:column;align-items:stretch;text-align:left;}
+    .bulk-row{width:100%;}
+    .bulk-row label{flex-shrink:0;}
+    .bulk-row input[type=text], .bulk-row select{flex:1;width:auto;min-width:0;}
   }
   .setup-account-row input[type=text]{font-size:.85rem;}
 
@@ -554,7 +562,7 @@
     <div style="margin-top:2rem;">
       <span class="eyebrow">Matrix</span>
       <h2>Fordelt pr. måned</h2>
-      <div class="table-card" style="overflow-x:auto;">
+      <div class="matrix-scroll">
         <table style="min-width:920px;">
           <thead><tr><th>Udgift</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>Maj</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dec</th><th style="text-align:right;">I alt</th></tr></thead>
           <tbody id="fuMatrixBody"></tbody>
@@ -1425,7 +1433,7 @@ function renderYearOverview(){
       catBody.innerHTML = cats.map(cat => {
         const color = (categories.find(c=>c.name===cat)||{}).color || '#A6A196';
         const pct = netExpenseTotal > 0 ? Math.round(sums[cat]/netExpenseTotal*100) : 0;
-        return `<tr><td><span class="tag" style="background:${color}26;color:${color}">${cat}</span></td><td style="text-align:right;">${fmt(sums[cat])}</td><td style="text-align:right;">${pct}%</td></tr>`;
+        return `<tr><td data-label=""><span class="tag" style="background:${color}26;color:${color}">${cat}</span></td><td data-label="Beløb" style="text-align:right;">${fmt(sums[cat])}</td><td data-label="Andel" style="text-align:right;">${pct}%</td></tr>`;
       }).join('');
     }
   }
@@ -1439,7 +1447,7 @@ function renderYearOverview(){
       if(!monthTx.length) continue;
       const {income: mi, expense: me} = computeGrossTotals(monthTx);
       const mn = mi - me;
-      rows.push(`<tr><td>${MONTH_NAMES_FULL[m]}</td><td style="text-align:right;">${fmt(mi)}</td><td style="text-align:right;">${fmt(me)}</td><td style="text-align:right;" class="${mn>=0?'amt-pos':'amt-neg'}">${(mn<0?'-':'')+fmt(Math.abs(mn))}</td></tr>`);
+      rows.push(`<tr><td data-label="">${MONTH_NAMES_FULL[m]}</td><td data-label="Indtægter" style="text-align:right;">${fmt(mi)}</td><td data-label="Udgifter" style="text-align:right;">${fmt(me)}</td><td data-label="Netto" style="text-align:right;" class="${mn>=0?'amt-pos':'amt-neg'}">${(mn<0?'-':'')+fmt(Math.abs(mn))}</td></tr>`);
     }
     monthBody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="empty-note">Ingen data for dette år.</td></tr>';
   }
