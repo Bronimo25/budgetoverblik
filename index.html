@@ -205,6 +205,13 @@
   .table-card{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow);}
   /* ---- Tætte måneds-matricer (fx Faste udgifter) — forbliver en rigtig tabel med vandret scroll på mobil, i stedet for at blive "kortificeret" som posteringslisterne ---- */
   .matrix-scroll{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow-x:auto;box-shadow:var(--shadow);}
+  /* ---- Visuelt hint om at en vandret-scrollbar matrix har mere indhold i den ene eller anden retning ---- */
+  .scroll-fade-wrap{position:relative;}
+  .scroll-fade-wrap::before, .scroll-fade-wrap::after{content:'';position:absolute;top:1px;bottom:1px;width:28px;pointer-events:none;opacity:0;transition:opacity .15s ease;z-index:2;}
+  .scroll-fade-wrap::before{left:1px;background:linear-gradient(to right, rgba(0,0,0,.14), transparent);border-radius:15px 0 0 15px;}
+  .scroll-fade-wrap::after{right:1px;background:linear-gradient(to left, rgba(0,0,0,.14), transparent);border-radius:0 15px 15px 0;}
+  .scroll-fade-wrap.can-scroll-left::before{opacity:1;}
+  .scroll-fade-wrap.can-scroll-right::after{opacity:1;}
 
   /* ---- Foldbare måneds-sektioner i posteringslisten ---- */
   tr.month-header-row td{padding:0;background:var(--bg);border-bottom:1px solid var(--line);}
@@ -562,11 +569,13 @@
     <div style="margin-top:2rem;">
       <span class="eyebrow">Matrix</span>
       <h2>Fordelt pr. måned</h2>
-      <div class="matrix-scroll">
-        <table style="min-width:920px;">
-          <thead><tr><th>Udgift</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>Maj</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dec</th><th style="text-align:right;">I alt</th></tr></thead>
-          <tbody id="fuMatrixBody"></tbody>
-        </table>
+      <div class="scroll-fade-wrap" id="fuMatrixWrap">
+        <div class="matrix-scroll" id="fuMatrixScroll">
+          <table style="min-width:920px;">
+            <thead><tr><th>Udgift</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>Maj</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dec</th><th style="text-align:right;">I alt</th></tr></thead>
+            <tbody id="fuMatrixBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -695,11 +704,13 @@
       <span class="eyebrow">Matrix</span>
       <h2>Pr. linje og måned</h2>
       <p class="lede" id="abModeHint"></p>
-      <div class="ab-scroll">
-        <table class="ab-table">
-          <thead><tr><th>Linje</th><th style="text-align:left;">Betaling / note</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>Maj</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dec</th><th>Årligt</th><th>Pr. md.</th></tr></thead>
-          <tbody id="abMatrixBody"></tbody>
-        </table>
+      <div class="scroll-fade-wrap" id="abMatrixWrap">
+        <div class="ab-scroll" id="abMatrixScroll">
+          <table class="ab-table">
+            <thead><tr><th>Linje</th><th style="text-align:left;">Betaling / note</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>Maj</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dec</th><th>Årligt</th><th>Pr. md.</th></tr></thead>
+            <tbody id="abMatrixBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
@@ -1979,6 +1990,22 @@ wireFilterControls('fu');
 attachSortHandlers('fu', document.getElementById('fuDetailTable'));
 const fuYearSel = document.getElementById('fuYear');
 if(fuYearSel) fuYearSel.addEventListener('change', renderFasteUdgifter);
+
+/* ---------- Skygge-hint på vandret-scrollbare matricer, så det er tydeligt der er flere måneder at se ---------- */
+function wireScrollFade(wrapId, scrollId){
+  const wrap = document.getElementById(wrapId);
+  const scrollEl = document.getElementById(scrollId);
+  if(!wrap || !scrollEl) return;
+  const update = () => {
+    wrap.classList.toggle('can-scroll-left', scrollEl.scrollLeft > 2);
+    wrap.classList.toggle('can-scroll-right', scrollEl.scrollLeft < scrollEl.scrollWidth - scrollEl.clientWidth - 2);
+  };
+  scrollEl.addEventListener('scroll', update);
+  new ResizeObserver(update).observe(scrollEl);
+  update();
+}
+wireScrollFade('fuMatrixWrap', 'fuMatrixScroll');
+wireScrollFade('abMatrixWrap', 'abMatrixScroll');
 
 /* ---------- Tab switching (delegeret, virker også for dynamisk tilføjede person-faner) ---------- */
 function switchTab(tab){
