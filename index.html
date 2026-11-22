@@ -236,6 +236,8 @@
   td.note-cell .inline-edit:hover{border-color:var(--accent);}
   textarea.note-edit{resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word;line-height:1.35;display:block;min-height:1.9em;font-family:inherit;}
   .tx-select-cell{width:2rem;}
+  .tx-review-cell{width:2.25rem;text-align:center;}
+  .tx-review-cell input{cursor:pointer;width:17px;height:17px;}
   .person-cell{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem;cursor:pointer;border-radius:8px;padding:.2rem;margin:-.2rem;transition:background .12s ease;}
   .person-cell:hover{background:var(--accent-soft);}
   .bulk-toolbar{display:none;position:fixed;left:0;right:0;bottom:0;width:100%;background:var(--bg-alt);border:none;border-top:2px solid var(--accent);padding:0;max-height:50vh;overflow-y:auto;box-shadow:0 -8px 24px rgba(20,18,15,.2);z-index:45;}
@@ -445,8 +447,8 @@
 
         <div class="table-card">
           <table>
-            <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th>Person(er)</th><th data-sort="category">Kategori</th><th style="text-align:right;" data-sort="amount">Beløb</th><th></th></tr></thead>
-            <tbody id="txBody-overblik"><tr><td colspan="8" class="empty-note">Ingen posteringer endnu — upload en CSV, tryk "Vis demo", eller tilføj manuelt.</td></tr></tbody>
+            <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th>Person(er)</th><th data-sort="category">Kategori</th><th style="text-align:right;" data-sort="amount">Beløb</th><th></th><th class="tx-review-cell" title="Godkendt">✓</th></tr></thead>
+            <tbody id="txBody-overblik"><tr><td colspan="9" class="empty-note">Ingen posteringer endnu — upload en CSV, tryk "Vis demo", eller tilføj manuelt.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -616,8 +618,8 @@
       </div>
       <div class="table-card">
         <table id="fuDetailTable">
-          <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx-fu" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th>Person(er)</th><th data-sort="category">Kategori</th><th style="text-align:right;" data-sort="amount">Beløb</th><th></th></tr></thead>
-          <tbody id="txBody-fu"><tr><td colspan="8" class="empty-note">Ingen faste udgifter for dette år endnu.</td></tr></tbody>
+          <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx-fu" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th>Person(er)</th><th data-sort="category">Kategori</th><th style="text-align:right;" data-sort="amount">Beløb</th><th></th><th class="tx-review-cell" title="Godkendt">✓</th></tr></thead>
+          <tbody id="txBody-fu"><tr><td colspan="9" class="empty-note">Ingen faste udgifter for dette år endnu.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1842,8 +1844,8 @@ function personTabHTML(person){
       ${personBulkBarHTML(slug)}
       <div class="table-card">
         <table>
-          <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx-${slug}" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th data-sort="amount">Andel</th><th data-sort="category">Kategori</th><th></th></tr></thead>
-          <tbody id="txBody-${slug}"><tr><td colspan="7" class="empty-note">Ingen posteringer for ${person} endnu.</td></tr></tbody>
+          <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx-${slug}" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th data-sort="amount">Andel</th><th data-sort="category">Kategori</th><th></th><th class="tx-review-cell" title="Godkendt">✓</th></tr></thead>
+          <tbody id="txBody-${slug}"><tr><td colspan="8" class="empty-note">Ingen posteringer for ${person} endnu.</td></tr></tbody>
         </table>
       </div>
     </div>`;
@@ -2264,7 +2266,7 @@ function renderTable(prefix, txList, person, amountFn){
     return catOptionsBase.replace(needle, `value="${esc}" selected>`);
   };
   if(!txList.length){
-    const colspan = person ? (showBulk ? 7 : 6) : (showBulk ? 8 : 7);
+    const colspan = person ? (showBulk ? 8 : 6) : (showBulk ? 9 : 7);
     body.innerHTML = `<tr><td colspan="${colspan}" class="empty-note">Ingen posteringer matcher.</td></tr>`;
     if(showBulk) syncSelectAllCheckbox(prefix, []);
     return;
@@ -2278,6 +2280,7 @@ function renderTable(prefix, txList, person, amountFn){
     const accountLabel = accountDisplayLabel(t.account);
     const accountNote = accountLabel ? `<div class="sub" style="margin-top:.1rem;">${accountLabel}</div>` : '';
     const noteVal = t.note || '';
+    const reviewedCell = `<td class="tx-review-cell" data-label="Godkendt"><input type="checkbox" class="reviewed-edit" data-id="${t.id}" ${t.reviewed ? 'checked' : ''} title="Markér som gennemgået/godkendt"></td>`;
 
     if(showBulk && person){
       const amt = amountFn(t);
@@ -2297,6 +2300,7 @@ function renderTable(prefix, txList, person, amountFn){
         <td class="${amtClass}" data-label="Andel">${amtStr}${splitNote}</td>
         <td data-label="Kategori"><select class="inline-edit cat-edit" data-id="${t.id}" style="background:${catColor}26;color:${catColor};border-color:${catColor}66;">${catOptionsSelected(t.category)}</select></td>
         <td data-label="">${editBtn}</td>
+        ${reviewedCell}
       </tr>`;
     } else if(showBulk){
       const amtClass = t.amount >= 0 ? 'amt-pos' : 'amt-neg';
@@ -2312,6 +2316,7 @@ function renderTable(prefix, txList, person, amountFn){
         <td data-label="Kategori"><select class="inline-edit cat-edit" data-id="${t.id}" style="background:${catColor}26;color:${catColor};border-color:${catColor}66;">${catOptionsSelected(t.category)}</select></td>
         <td style="text-align:right;" class="${amtClass}" data-label="Beløb">${amtStr}</td>
         <td data-label="">${editBtn}</td>
+        ${reviewedCell}
       </tr>`;
     } else if(person){
       const amt = amountFn(t);
@@ -2322,12 +2327,12 @@ function renderTable(prefix, txList, person, amountFn){
         const others = t.assignments.filter(a => a.person !== person).map(a => a.person).join(', ');
         splitNote = `<div class="sub" style="margin-top:.15rem;">af ${fmt(Math.abs(t.amount))} · delt med ${others}</div>`;
       }
-      return `<tr${extraAttrs}><td data-label="Dato">${dateStr}</td><td class="desc" data-label="Tekst">${t.desc}${fixedMark}${accountNote}</td><td class="note-cell" data-label="Note">${noteVal}</td><td class="${amtClass}" data-label="Andel">${amtStr}${splitNote}</td><td data-label="Kategori">${catTag}</td><td data-label="">${editBtn}</td></tr>`;
+      return `<tr${extraAttrs}><td data-label="Dato">${dateStr}</td><td class="desc" data-label="Tekst">${t.desc}${fixedMark}${accountNote}</td><td class="note-cell" data-label="Note">${noteVal}</td><td class="${amtClass}" data-label="Andel">${amtStr}${splitNote}</td><td data-label="Kategori">${catTag}</td><td data-label="">${editBtn}</td>${reviewedCell}</tr>`;
     } else {
       const amtClass = t.amount >= 0 ? 'amt-pos' : 'amt-neg';
       const amtStr = (t.amount >= 0 ? '+' : '-') + fmt(Math.abs(t.amount));
       const badges = t.assignments.map(a => `<span class="pbadge" style="background:${PEOPLE_COLORS[a.person]}26;color:${PEOPLE_COLORS[a.person]}">${a.person}${t.assignments.length>1 ? ' '+fmt(Math.abs(a.amount)) : ''}</span>`).join('');
-      return `<tr${extraAttrs}><td data-label="Dato">${dateStr}</td><td class="desc" data-label="Tekst">${t.desc}${fixedMark}${accountNote}</td><td class="note-cell" data-label="Note">${noteVal}</td><td data-label="Person(er)">${badges}</td><td data-label="Kategori">${catTag}</td><td style="text-align:right;" class="${amtClass}" data-label="Beløb">${amtStr}</td><td data-label="">${editBtn}</td></tr>`;
+      return `<tr${extraAttrs}><td data-label="Dato">${dateStr}</td><td class="desc" data-label="Tekst">${t.desc}${fixedMark}${accountNote}</td><td class="note-cell" data-label="Note">${noteVal}</td><td data-label="Person(er)">${badges}</td><td data-label="Kategori">${catTag}</td><td style="text-align:right;" class="${amtClass}" data-label="Beløb">${amtStr}</td><td data-label="">${editBtn}</td>${reviewedCell}</tr>`;
     }
   };
 
@@ -2339,7 +2344,7 @@ function renderTable(prefix, txList, person, amountFn){
       groups.get(key).push(t);
     });
     const keys = [...groups.keys()].sort().reverse();
-    const colspan = 8;
+    const colspan = 9;
     let html = '';
     keys.forEach((key, idx) => {
       const items = groups.get(key);
@@ -2363,7 +2368,7 @@ function renderTable(prefix, txList, person, amountFn){
     const visible = capped ? txList.slice(0, TABLE_ROW_CAP) : txList;
     let html = visible.map(t => buildRow(t, '')).join('');
     if(capped){
-      const colspan = person ? (showBulk ? 7 : 6) : (showBulk ? 8 : 7);
+      const colspan = person ? (showBulk ? 8 : 6) : (showBulk ? 9 : 7);
       const rest = txList.length - TABLE_ROW_CAP;
       html += `<tr class="show-all-row"><td colspan="${colspan}" style="text-align:center;padding:1rem;">
         <button type="button" class="show-all-rows-btn" data-prefix="${prefix}">Vis alle ${txList.length} posteringer (${rest} flere)</button>
@@ -2748,6 +2753,11 @@ function wireBulkToolbar(prefix){
       updateBulkToolbar(prefix);
       return;
     }
+    if(e.target.classList.contains('reviewed-edit')){
+      const t = id ? transactions.find(x => x.id === id) : null;
+      if(t){ t.reviewed = e.target.checked; scheduleAutosave(); }
+      return;
+    }
     const t = id ? transactions.find(x => x.id === id) : null;
     if(!t) return;
     if(e.target.classList.contains('desc-edit')){
@@ -2834,7 +2844,8 @@ function wireBulkToolbar(prefix){
       const c = Object.assign({}, t, {
         id: 'tx'+Date.now()+Math.random().toString(36).slice(2,7)+created.length,
         date: date,
-        assignments: t.assignments.map(a => Object.assign({}, a))
+        assignments: t.assignments.map(a => Object.assign({}, a)),
+        reviewed: false
       });
       transactions.push(c); created.push(c.id);
     };
