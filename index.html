@@ -746,11 +746,54 @@
   <!-- ===== SETUP ===== -->
   <section class="tab-panel" id="tab-setup">
     <span class="eyebrow">Setup</span>
-    <h2>Hent eller indtast posteringer</h2>
+    <h2>Personer</h2>
+    <p class="lede">Ret navn eller farve direkte i felterne — det gemmes med det samme. Fjerner du en person med posteringer, skal du vælge hvem de skal overføres til.</p>
+    <div class="rules-card">
+      <div id="setupPeopleList"></div>
+      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
+        <button class="secondary" id="addPersonBtn">+ Tilføj person</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:2rem;">Konti</h2>
+    <p class="lede">Konti tilføjes automatisk med deres kontonummer, når du indlæser en CSV-fil hvor du har skrevet kontonummeret i feltet "Kontonummer for denne fil" nedenfor. Giv hver konto et navn her, så den vises som fx "Konto 6293791048 (Rune)" på posteringerne.</p>
+    <div class="rules-card">
+      <div id="setupAccountsList"></div>
+      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
+        <button class="secondary" id="addAccountBtn">+ Tilføj konto manuelt</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:2rem;">Indstillinger</h2>
+    <p class="lede">Slå automatiske forslag og hjælpefunktioner til eller fra.</p>
+    <div class="rules-card">
+      <div class="modal-field checkbox-field">
+        <label><input type="checkbox" id="settingCategoryHistory"> Foreslå kategori ud fra tidligere rettelser af samme tekst</label>
+      </div>
+      <div class="modal-field checkbox-field">
+        <label><input type="checkbox" id="settingDuplicateWarning"> Advar om posteringer der ligner en eksisterende (samme dato+beløb) ved CSV-upload</label>
+      </div>
+      <div class="modal-field checkbox-field">
+        <label><input type="checkbox" id="settingFixedDetection"> Find mønstre der ligner faste udgifter og foreslå at markere dem</label>
+      </div>
+      <div class="modal-field checkbox-field">
+        <label><input type="checkbox" id="settingBulkUndo"> Bulk-sletning sker med det samme, men kan fortrydes bagefter (i stedet for en bekræftelses-dialog)</label>
+      </div>
+    </div>
+
+    <h2 style="margin-top:2rem;">Forslag: faste udgifter</h2>
+    <p class="lede">Posteringer hvor samme tekst går igen med nogenlunde samme beløb i mindst 3 forskellige måneder, men som ikke allerede er markeret som fast udgift.</p>
+    <div class="rules-card" id="fixedCandidatesBox"></div>
+
+    <h2 style="margin-top:2rem;">Mulige dubletter</h2>
+    <p class="lede">Posteringer med samme dato og beløb, men forskellig tekst — fx en intern overførsel set fra to konti. Slet den forkerte direkte herfra, eller markér gruppen som "ikke en dublet" for at skjule den.</p>
+    <div class="rules-card" id="duplicateCandidatesBox"></div>
+
+    <h2 style="margin-top:2rem;">Hent eller indtast posteringer</h2>
     <div class="upload-zone" id="dropZone">
       <p><strong>Træk din CSV-fil herind</strong>, eller vælg den manuelt.</p>
       <p>Filen behandles kun i din browser og sendes ingen steder hen. Du kan uploade flere filer fra forskellige konti — nye posteringer lægges til de eksisterende (dubletter springes automatisk over).</p>
-      <input type="text" id="accountLabel" placeholder="Kontonummer for denne fil (fx 6293791048) — navngives nedenfor under Konti" style="width:100%;max-width:360px;margin:.5rem auto 0;display:block;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;font-family:'Inter', sans-serif;font-size:.85rem;background:var(--bg-alt);color:var(--ink);">
+      <input type="text" id="accountLabel" placeholder="Kontonummer for denne fil (fx 6293791048) — navngives ovenfor under Konti" style="width:100%;max-width:360px;margin:.5rem auto 0;display:block;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;font-family:'Inter', sans-serif;font-size:.85rem;background:var(--bg-alt);color:var(--ink);">
       <div class="btn-row">
         <button id="pickFileBtn">Vælg CSV-fil</button>
         <button class="secondary" id="demoBtn">Vis demo med eksempeldata</button>
@@ -783,49 +826,6 @@
       <button class="secondary" id="importBtn">📁 Importér / migrér fra fil</button>
       <input type="file" id="importFileInput" accept=".json">
     </div>
-
-    <h2 style="margin-top:2.5rem;">Personer</h2>
-    <p class="lede">Ret navn eller farve direkte i felterne — det gemmes med det samme. Fjerner du en person med posteringer, skal du vælge hvem de skal overføres til.</p>
-    <div class="rules-card">
-      <div id="setupPeopleList"></div>
-      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
-        <button class="secondary" id="addPersonBtn">+ Tilføj person</button>
-      </div>
-    </div>
-
-    <h2 style="margin-top:2rem;">Konti</h2>
-    <p class="lede">Konti tilføjes automatisk med deres kontonummer, når du indlæser en CSV-fil hvor du har skrevet kontonummeret i feltet "Kontonummer for denne fil" herover. Giv hver konto et navn her, så den vises som fx "Konto 6293791048 (Rune)" på posteringerne.</p>
-    <div class="rules-card">
-      <div id="setupAccountsList"></div>
-      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
-        <button class="secondary" id="addAccountBtn">+ Tilføj konto manuelt</button>
-      </div>
-    </div>
-
-    <h2 style="margin-top:2rem;">Indstillinger</h2>
-    <p class="lede">Slå automatiske forslag og hjælpefunktioner til eller fra.</p>
-    <div class="rules-card">
-      <div class="modal-field checkbox-field">
-        <label><input type="checkbox" id="settingCategoryHistory"> Foreslå kategori ud fra tidligere rettelser af samme tekst</label>
-      </div>
-      <div class="modal-field checkbox-field">
-        <label><input type="checkbox" id="settingDuplicateWarning"> Advar om posteringer der ligner en eksisterende (samme dato+beløb) ved CSV-upload</label>
-      </div>
-      <div class="modal-field checkbox-field">
-        <label><input type="checkbox" id="settingFixedDetection"> Find mønstre der ligner faste udgifter og foreslå at markere dem</label>
-      </div>
-      <div class="modal-field checkbox-field">
-        <label><input type="checkbox" id="settingBulkUndo"> Bulk-sletning sker med det samme, men kan fortrydes bagefter (i stedet for en bekræftelses-dialog)</label>
-      </div>
-    </div>
-
-    <h2 style="margin-top:2rem;">Forslag: faste udgifter</h2>
-    <p class="lede">Posteringer hvor samme tekst går igen med nogenlunde samme beløb i mindst 3 forskellige måneder, men som ikke allerede er markeret som fast udgift.</p>
-    <div class="rules-card" id="fixedCandidatesBox"></div>
-
-    <h2 style="margin-top:2rem;">Mulige dubletter</h2>
-    <p class="lede">Posteringer med samme dato og beløb, men forskellig tekst — fx en intern overførsel set fra to konti. Slet den forkerte direkte herfra, eller markér gruppen som "ikke en dublet" for at skjule den.</p>
-    <div class="rules-card" id="duplicateCandidatesBox"></div>
   </section>
 
   <footer>Dine data gemmes i Supabase og er tilgængelige fra alle enheder du logger ind på.</footer>
