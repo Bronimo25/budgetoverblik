@@ -206,6 +206,13 @@
   .undo-toast.show{opacity:1;transform:translate(-50%, 0);pointer-events:auto;}
   .undo-toast button{background:var(--accent);color:#fff;padding:.4rem .8rem;font-size:.8rem;border:none;}
 
+  /* ---- Gem-konflikt: nogen andre har gemt siden vi hentede data, så vi stopper autosave og lader brugeren vælge ---- */
+  .conflict-toast{position:fixed;left:50%;top:1rem;transform:translate(-50%, -20px);max-width:min(92vw, 560px);background:var(--bg-alt);color:var(--ink);border:1.5px solid var(--negative);padding:1rem 1.2rem;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s ease, transform .2s ease;font-size:.85rem;}
+  .conflict-toast.show{opacity:1;transform:translate(-50%, 0);pointer-events:auto;}
+  .conflict-toast p{margin:0 0 .75rem;line-height:1.45;}
+  .conflict-toast .conflict-actions{display:flex;gap:.6rem;flex-wrap:wrap;}
+  .conflict-toast button{font-size:.82rem;padding:.5rem .8rem;}
+
   .table-card{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow:hidden;overflow-x:auto;box-shadow:var(--shadow);}
   /* ---- Tætte måneds-matricer (fx Faste udgifter) — forbliver en rigtig tabel med vandret scroll på mobil, i stedet for at blive "kortificeret" som posteringslisterne ---- */
   .matrix-scroll{background:var(--bg-alt);border:1px solid var(--line);border-radius:16px;overflow-x:auto;box-shadow:var(--shadow);}
@@ -817,6 +824,14 @@
 <div class="undo-toast" id="undoToast">
   <span id="undoToastText"></span>
   <button type="button" id="undoToastBtn">Fortryd</button>
+</div>
+
+<div class="conflict-toast" id="conflictToast">
+  <p>⚠️ Nogen andre har gemt ændringer, siden du sidst hentede data. Dine seneste ændringer er <strong>ikke</strong> gemt endnu, for ikke at overskrive det den anden lavede.</p>
+  <div class="conflict-actions">
+    <button type="button" id="conflictReloadBtn">Hent nyeste version (mine ændringer går tabt)</button>
+    <button type="button" class="secondary" id="conflictForceSaveBtn">Gem mine ændringer alligevel (overskriver)</button>
+  </div>
 </div>
 
 <!-- ===== MODAL ===== -->
@@ -3194,7 +3209,7 @@ document.getElementById('importFileInput').addEventListener('change', e => {
       loadPeopleFromImport(data);
       document.getElementById('resetBtn').style.display = 'inline-block';
       rebuildPeopleUI();
-      saveToSupabase();
+      saveToSupabase(true); // eksplicit import/migrering fra fil — en bevidst overskrivning, så gem-konflikt-tjekket giver ikke mening her
     }catch(err){
       alert('Kunne ikke læse filen. Er det en gyldig eksport fra dette værktøj?');
     }
@@ -3220,6 +3235,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let budgetRowId = null;
 let autosaveEnabled = true;
 let autosaveTimer = null;
+let lastKnownExportedAt = null; // "exportedAt" fra den version vi sidst hentede/gemte — bruges til at opdage at en anden bruger har gemt i mellemtiden
 
 function setSaveStatus(text){
   const el = document.getElementById('saveStatus');
@@ -3235,18 +3251,26 @@ async function loadFromSupabase(){
   return null;
 }
 
-async function saveToSupabase(){
+async function saveToSupabase(force){
   setSaveStatus('Gemmer…');
   const payload = currentExportData();
   try{
     if(budgetRowId){
-      const { error } = await sb.from('budget_data').update({data: payload}).eq('id', budgetRowId);
+      // Betinget opdatering: skriv kun hvis ingen andre har gemt siden vi sidst hentede/gemte (medmindre brugeren har bedt om at overskrive alligevel).
+      let query = sb.from('budget_data').update({data: payload}).eq('id', budgetRowId);
+      if(!force && lastKnownExportedAt) query = query.eq('data->>exportedAt', lastKnownExportedAt);
+      const { data: updatedRows, error } = await query.select('id');
       if(error) throw error;
+      if(!force && lastKnownExportedAt && (!updatedRows || !updatedRows.length)){
+        showConflictToast();
+        return;
+      }
     } else {
       const { data, error } = await sb.from('budget_data').insert({data: payload}).select('id').single();
       if(error) throw error;
       budgetRowId = data.id;
     }
+    lastKnownExportedAt = payload.exportedAt;
     setSaveStatus('Gemt kl. ' + new Date().toLocaleTimeString('da-DK',{hour:'2-digit',minute:'2-digit'}));
   }catch(err){
     console.error(err);
@@ -3258,8 +3282,39 @@ function scheduleAutosave(){
   if(!autosaveEnabled) return;
   setSaveStatus('Gemmer…');
   clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(saveToSupabase, 800);
+  autosaveTimer = setTimeout(() => saveToSupabase(), 800);
 }
+
+/* ---------- Gem-konflikt: pause autosave og lad brugeren vælge, i stedet for at overskrive den andens ændringer i stilhed ---------- */
+function showConflictToast(){
+  autosaveEnabled = false;
+  clearTimeout(autosaveTimer);
+  setSaveStatus('Gem sat på pause — konflikt.');
+  const toast = document.getElementById('conflictToast');
+  if(toast) toast.classList.add('show');
+}
+function hideConflictToast(){
+  autosaveEnabled = true;
+  const toast = document.getElementById('conflictToast');
+  if(toast) toast.classList.remove('show');
+}
+async function reloadLatestFromSupabase(){
+  const data = await loadFromSupabase();
+  if(data && data.transactions && data.categories){
+    categories = data.categories.map(c => ({budget:null, ...c}));
+    transactions = data.transactions.map(t => ({...t, note: t.note||'', date: new Date(t.date)}));
+    loadPeopleFromImport(data);
+    lastKnownExportedAt = data.exportedAt || null;
+    rebuildPeopleUI();
+  }
+  hideConflictToast();
+  renderAll();
+}
+document.getElementById('conflictReloadBtn').addEventListener('click', reloadLatestFromSupabase);
+document.getElementById('conflictForceSaveBtn').addEventListener('click', () => {
+  hideConflictToast();
+  saveToSupabase(true);
+});
 
 async function bootAfterAuth(){
   document.getElementById('authOverlay').classList.remove('show');
@@ -3269,6 +3324,7 @@ async function bootAfterAuth(){
     categories = data.categories.map(c => ({budget:null, ...c}));
     transactions = data.transactions.map(t => ({...t, note: t.note||'', date: new Date(t.date)}));
     loadPeopleFromImport(data);
+    lastKnownExportedAt = data.exportedAt || null;
     document.getElementById('resetBtn').style.display = 'inline-block';
     setSaveStatus('Hentet fra Supabase.');
   } else {
@@ -3314,8 +3370,8 @@ sb.auth.onAuthStateChange((event, session) => {
   }
 });
 
-document.getElementById('saveDirectBtn').addEventListener('click', saveToSupabase);
-document.getElementById('navSaveBtn').addEventListener('click', saveToSupabase);
+document.getElementById('saveDirectBtn').addEventListener('click', () => saveToSupabase());
+document.getElementById('navSaveBtn').addEventListener('click', () => saveToSupabase());
 
 /* ---------- Indstillinger UI ---------- */
 function syncSettingsUI(){
