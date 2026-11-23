@@ -1962,10 +1962,11 @@ function populateMonthFilter(prefix, txList){
 function populateYearFilter(prefix, txList){
   const sel = document.getElementById('filterYear-'+prefix);
   if(!sel) return;
-  const cur = sel.value;
-  const years = [...new Set(txList.map(t => t.date.getFullYear()))].sort((a,b) => b-a);
-  sel.innerHTML = '<option value="">Alle år</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
-  sel.value = cur;
+  const years = new Set(txList.map(t => t.date.getFullYear()));
+  years.add(new Date().getFullYear()); // indeværende år skal altid kunne vælges, også før der findes posteringer for det
+  const sortedYears = [...years].sort((a,b) => b-a);
+  sel.innerHTML = '<option value="">Alle år</option>' + sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+  sel.value = getFilterState(prefix).year; // filterState er sandheden, ikke selectens tidligere DOM-værdi
 }
 function populatePersonFilter(prefix){
   const sel = document.getElementById('filterPerson-'+prefix);
@@ -1987,7 +1988,11 @@ function debounce(fn, wait){
   return function(...args){ clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), wait); };
 }
 const debouncedApplyTableFilters = {};
-function wireFilterControls(prefix){
+// Faner hvor "år"-filteret som udgangspunkt skal stå på indeværende år (i stedet for "Alle år"), indtil brugeren selv ændrer det i sessionen.
+function wireFilterControls(prefix, defaultCurrentYear){
+  if(defaultCurrentYear && !filterState[prefix]){
+    getFilterState(prefix).year = String(new Date().getFullYear());
+  }
   const search = document.getElementById('search-'+prefix);
   const cat = document.getElementById('filterCategory-'+prefix);
   const per = document.getElementById('filterPerson-'+prefix);
@@ -2000,7 +2005,14 @@ function wireFilterControls(prefix){
   if(cat) cat.addEventListener('change', () => { getFilterState(prefix).category = cat.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(per) per.addEventListener('change', () => { getFilterState(prefix).person = per.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(month) month.addEventListener('change', () => { getFilterState(prefix).month = month.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
-  if(year) year.addEventListener('change', () => { getFilterState(prefix).year = year.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
+  if(year) year.addEventListener('change', () => {
+    getFilterState(prefix).year = year.value;
+    resetTableShowAll(prefix);
+    // Året styrer også KPI'er/grafer (ikke kun listen), så genkør hele dashboardet med den uafkortede liste, der allerede ligger i cachen.
+    const cache = dashboardCache[prefix];
+    if(cache) renderDashboard(prefix, cache.txList, cache.amountFn, cache.person);
+    else applyTableFilters(prefix);
+  });
   if(account) account.addEventListener('change', () => { getFilterState(prefix).account = account.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(reviewed) reviewed.addEventListener('change', () => { getFilterState(prefix).reviewed = reviewed.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
 }
@@ -2043,7 +2055,7 @@ function applyTableFilters(prefix){
   renderTable(prefix, list, cache.person, cache.amountFn);
 }
 
-wireFilterControls('overblik');
+wireFilterControls('overblik', true);
 attachSortHandlers('overblik', document.querySelector('#tab-overblik table'));
 wireFilterControls('fu');
 attachSortHandlers('fu', document.getElementById('fuDetailTable'));
@@ -2109,7 +2121,7 @@ function buildPersonPanels(){
     panel.innerHTML = personTabHTML(p.name);
     slot.appendChild(panel);
     document.getElementById('addBtn-'+slug).addEventListener('click', () => openModal(null, p.name));
-    wireFilterControls(slug);
+    wireFilterControls(slug, true);
     attachSortHandlers(slug, panel.querySelector('table'));
     registerBulkPrefix(slug);
     wireBulkToolbar(slug);
@@ -2475,7 +2487,10 @@ function renderTable(prefix, txList, person, amountFn){
 }
 
 function renderDashboard(prefix, txList, amountFn, person){
-  const totalsList = txList.filter(t => !isExcludedCategory(t.category));
+  // KPI'er og grafer følger det valgte år (hvis et er valgt) — ikke kun selve listen — så toppen af siden og posteringerne nedenunder altid stemmer overens.
+  const yearFilter = getFilterState(prefix).year;
+  const scopedList = yearFilter ? txList.filter(t => String(t.date.getFullYear()) === yearFilter) : txList;
+  const totalsList = scopedList.filter(t => !isExcludedCategory(t.category));
   const {income, expense} = computeGrossTotals(totalsList, amountFn);
   setText('kpiExpense-'+prefix, fmt(expense));
   setText('kpiExpenseSub-'+prefix, totalsList.length ? totalsList.filter(t=>amountFn(t)<0).length + ' posteringer' : '–');
