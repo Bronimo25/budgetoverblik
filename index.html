@@ -424,6 +424,7 @@
           <select id="filterAccount-overblik"><option value="">Alle konti</option></select>
           <select id="filterMonth-overblik"><option value="">Alle måneder</option></select>
           <select id="filterYear-overblik"><option value="">Alle år</option></select>
+          <select id="filterReviewed-overblik"><option value="">Alle (godkendt/ikke)</option><option value="yes">Godkendt</option><option value="no">Ikke godkendt</option></select>
         </div>
         <div class="select-all-row">
           <label><input type="checkbox" id="selectAllVisible-overblik"> Vælg alle synlige</label>
@@ -602,6 +603,7 @@
         <select id="filterPerson-fu"><option value="">Alle personer</option></select>
         <select id="filterAccount-fu"><option value="">Alle konti</option></select>
         <select id="filterMonth-fu"><option value="">Alle måneder</option></select>
+        <select id="filterReviewed-fu"><option value="">Alle (godkendt/ikke)</option><option value="yes">Godkendt</option><option value="no">Ikke godkendt</option></select>
       </div>
       <div class="select-all-row">
         <label><input type="checkbox" id="selectAllVisible-fu"> Vælg alle synlige</label>
@@ -1884,6 +1886,7 @@ function personTabHTML(person){
         <select id="filterAccount-${slug}"><option value="">Alle konti</option></select>
         <select id="filterMonth-${slug}"><option value="">Alle måneder</option></select>
         <select id="filterYear-${slug}"><option value="">Alle år</option></select>
+        <select id="filterReviewed-${slug}"><option value="">Alle (godkendt/ikke)</option><option value="yes">Godkendt</option><option value="no">Ikke godkendt</option></select>
       </div>
       <div class="select-all-row">
         <label><input type="checkbox" id="selectAllVisible-${slug}"> Vælg alle synlige</label>
@@ -1900,7 +1903,7 @@ function personTabHTML(person){
 
 /* ---------- Filters & sorting ---------- */
 function getFilterState(prefix){
-  if(!filterState[prefix]) filterState[prefix] = {search:'', category:'', person:'', month:'', year:'', account:''};
+  if(!filterState[prefix]) filterState[prefix] = {search:'', category:'', person:'', month:'', year:'', account:'', reviewed:''};
   return filterState[prefix];
 }
 function getSortState(prefix){
@@ -1967,6 +1970,7 @@ function wireFilterControls(prefix){
   const month = document.getElementById('filterMonth-'+prefix);
   const year = document.getElementById('filterYear-'+prefix);
   const account = document.getElementById('filterAccount-'+prefix);
+  const reviewed = document.getElementById('filterReviewed-'+prefix);
   if(!debouncedApplyTableFilters[prefix]) debouncedApplyTableFilters[prefix] = debounce(() => applyTableFilters(prefix), 180);
   if(search) search.addEventListener('input', () => { getFilterState(prefix).search = search.value; resetTableShowAll(prefix); debouncedApplyTableFilters[prefix](); });
   if(cat) cat.addEventListener('change', () => { getFilterState(prefix).category = cat.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
@@ -1974,6 +1978,7 @@ function wireFilterControls(prefix){
   if(month) month.addEventListener('change', () => { getFilterState(prefix).month = month.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(year) year.addEventListener('change', () => { getFilterState(prefix).year = year.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(account) account.addEventListener('change', () => { getFilterState(prefix).account = account.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
+  if(reviewed) reviewed.addEventListener('change', () => { getFilterState(prefix).reviewed = reviewed.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
 }
 function updateSortArrows(prefix, tableEl){
   const st = getSortState(prefix);
@@ -2007,6 +2012,8 @@ function applyTableFilters(prefix){
   if(st.month) list = list.filter(t => monthKey(t.date) === st.month);
   if(st.year) list = list.filter(t => String(t.date.getFullYear()) === st.year);
   if(st.account) list = list.filter(t => t.account === st.account);
+  if(st.reviewed === 'yes') list = list.filter(t => !!t.reviewed);
+  else if(st.reviewed === 'no') list = list.filter(t => !t.reviewed);
   const sort = getSortState(prefix);
   list = list.slice().sort((a,b) => compareBy(a, b, sort.col, cache.person, cache.amountFn) * (sort.dir === 'asc' ? 1 : -1));
   renderTable(prefix, list, cache.person, cache.amountFn);
