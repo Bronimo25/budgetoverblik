@@ -417,7 +417,7 @@
           <button id="addTxBtn">+ Tilføj postering manuelt</button>
         </div>
         <div class="filter-row">
-          <input type="text" id="search-overblik" placeholder="Søg i tekst...">
+          <input type="text" id="search-overblik" placeholder="Søg i tekst eller beløb...">
           <select id="filterCategory-overblik"><option value="">Alle kategorier</option></select>
           <select id="filterPerson-overblik"><option value="">Alle personer</option></select>
           <select id="filterAccount-overblik"><option value="">Alle konti</option></select>
@@ -560,7 +560,7 @@
       <span class="eyebrow">Detaljer</span>
       <h2>Alle faste udgifter i <span id="fuListYearLabel"></span></h2>
       <div class="filter-row">
-        <input type="text" id="search-fu" placeholder="Søg i tekst...">
+        <input type="text" id="search-fu" placeholder="Søg i tekst eller beløb...">
         <select id="filterCategory-fu"><option value="">Alle kategorier</option></select>
         <select id="filterPerson-fu"><option value="">Alle personer</option></select>
         <select id="filterAccount-fu"><option value="">Alle konti</option></select>
@@ -1897,7 +1897,7 @@ function personTabHTML(person){
       <span class="eyebrow">Detaljer</span>
       <h2>Posteringer der vedrører ${person}</h2>
       <div class="filter-row">
-        <input type="text" id="search-${slug}" placeholder="Søg i tekst...">
+        <input type="text" id="search-${slug}" placeholder="Søg i tekst eller beløb...">
         <select id="filterCategory-${slug}"><option value="">Alle kategorier</option></select>
         <select id="filterAccount-${slug}"><option value="">Alle konti</option></select>
         <select id="filterMonth-${slug}"><option value="">Alle måneder</option></select>
@@ -2034,7 +2034,20 @@ function applyTableFilters(prefix){
   if(!cache) return;
   const st = getFilterState(prefix);
   let list = cache.txList;
-  if(st.search){ const q = st.search.toLowerCase(); list = list.filter(t => t.desc.toLowerCase().includes(q)); }
+  if(st.search){
+    const q = st.search.trim().toLowerCase();
+    const qNum = q.replace(',', '.'); // tillad komma som decimalseparator, ligesom resten af appen
+    const matchesAmount = (amt) => {
+      const abs = Math.abs(amt);
+      return String(amt).includes(qNum) || String(abs).includes(qNum) || fmt(abs).toLowerCase().includes(q);
+    };
+    list = list.filter(t => {
+      if(t.desc.toLowerCase().includes(q)) return true;
+      if(matchesAmount(t.amount)) return true;
+      // På personfaner kan andelen af en delt postering afvige fra det fulde beløb — søg i begge.
+      return cache.person ? matchesAmount(cache.amountFn(t)) : false;
+    });
+  }
   if(st.category) list = list.filter(t => t.category === st.category);
   if(st.person) list = list.filter(t => t.assignments.some(a => a.person === st.person));
   if(st.month) list = list.filter(t => monthKey(t.date) === st.month);
