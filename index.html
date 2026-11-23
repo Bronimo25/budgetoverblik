@@ -457,6 +457,14 @@
               </select>
             </div>
             <div class="bulk-row">
+              <label>Godkendt</label>
+              <select id="bulkReviewed">
+                <option value="">– Behold –</option>
+                <option value="yes">Ja</option>
+                <option value="no">Nej</option>
+              </select>
+            </div>
+            <div class="bulk-row">
               <label>Type</label>
               <select id="bulkType">
                 <option value="">– Behold –</option>
@@ -629,6 +637,14 @@
           <div class="bulk-row">
             <label>Fast udgift</label>
             <select id="bulkFixed-fu">
+              <option value="">– Behold –</option>
+              <option value="yes">Ja</option>
+              <option value="no">Nej</option>
+            </select>
+          </div>
+          <div class="bulk-row">
+            <label>Godkendt</label>
+            <select id="bulkReviewed-fu">
               <option value="">– Behold –</option>
               <option value="yes">Ja</option>
               <option value="no">Nej</option>
@@ -1823,6 +1839,14 @@ function personBulkBarHTML(slug){
           </select>
         </div>
         <div class="bulk-row">
+          <label>Godkendt</label>
+          <select id="bulkReviewed-${slug}">
+            <option value="">– Behold –</option>
+            <option value="yes">Ja</option>
+            <option value="no">Nej</option>
+          </select>
+        </div>
+        <div class="bulk-row">
           <label>Type</label>
           <select id="bulkType-${slug}">
             <option value="">– Behold –</option>
@@ -2879,13 +2903,15 @@ function wireBulkToolbar(prefix){
     const noteInput = document.getElementById(bulkElId('bulkNote', prefix));
     const catSel = document.getElementById(bulkElId('bulkCategory', prefix));
     const fixedSel = document.getElementById(bulkElId('bulkFixed', prefix));
+    const reviewedSel = document.getElementById(bulkElId('bulkReviewed', prefix));
     const descVal = descInput.value.trim();
     const noteVal = noteInput.value;
     const catVal = catSel.value;
     const fixedVal = fixedSel.value;
+    const reviewedVal = reviewedSel ? reviewedSel.value : '';
     const typeSel = document.getElementById(bulkElId('bulkType', prefix));
     const typeVal = typeSel ? typeSel.value : '';
-    if(!descVal && !noteVal && !catVal && !fixedVal && !typeVal){ alert('Udfyld mindst ét felt, du vil ændre.'); return; }
+    if(!descVal && !noteVal && !catVal && !fixedVal && !reviewedVal && !typeVal){ alert('Udfyld mindst ét felt, du vil ændre.'); return; }
     transactions.forEach(t => {
       if(!selSet(prefix).has(t.id)) return;
       if(typeVal){
@@ -2899,11 +2925,14 @@ function wireBulkToolbar(prefix){
       if(catVal){ t.category = catVal; t.categoryManual = true; }
       if(fixedVal === 'yes') t.fixed = true;
       else if(fixedVal === 'no') t.fixed = false;
+      if(reviewedVal === 'yes') t.reviewed = true;
+      else if(reviewedVal === 'no') t.reviewed = false;
     });
     descInput.value = '';
     noteInput.value = '';
     catSel.value = '';
     fixedSel.value = '';
+    if(reviewedSel) reviewedSel.value = '';
     if(typeSel) typeSel.value = '';
     renderAll();
   });
