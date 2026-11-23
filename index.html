@@ -378,7 +378,6 @@
   <div class="tabnav-row">
     <nav class="tabnav" id="tabNav">
       <button data-tab="overblik" class="active">Overblik</button>
-      <button data-tab="upload">Upload</button>
       <!-- person-faner indsættes her af JS -->
       <button data-tab="fasteudgifter">Faste Udgifter</button>
       <button data-tab="aarsbudget">Årsbudget</button>
@@ -522,51 +521,6 @@
           </div>
         </div>
       </aside>
-    </div>
-  </section>
-
-  <!-- ===== UPLOAD ===== -->
-  <section class="tab-panel" id="tab-upload">
-    <span class="eyebrow">Trin 1</span>
-    <h2>Hent eller indtast posteringer</h2>
-    <div class="upload-zone" id="dropZone">
-      <p><strong>Træk din CSV-fil herind</strong>, eller vælg den manuelt.</p>
-      <p>Filen behandles kun i din browser og sendes ingen steder hen. Du kan uploade flere filer fra forskellige konti — nye posteringer lægges til de eksisterende (dubletter springes automatisk over).</p>
-      <input type="text" id="accountLabel" placeholder="Kontonummer for denne fil (fx 6293791048) — navngives under Setup › Konti" style="width:100%;max-width:360px;margin:.5rem auto 0;display:block;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;font-family:'Inter', sans-serif;font-size:.85rem;background:var(--bg-alt);color:var(--ink);">
-      <div class="btn-row">
-        <button id="pickFileBtn">Vælg CSV-fil</button>
-        <button class="secondary" id="demoBtn">Vis demo med eksempeldata</button>
-        <button class="secondary" id="resetBtn" style="display:none;">Nulstil alt</button>
-      </div>
-      <input type="file" id="fileInput" accept=".csv,.txt">
-    </div>
-
-    <div style="margin-top:2.5rem;">
-      <span class="eyebrow">Trin 2</span>
-      <h2>Gem og genåbn dit arbejde</h2>
-      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;flex-wrap:wrap;align-items:center;gap:.6rem;">
-        <button id="saveDirectBtn">💾 Gem til Supabase</button>
-        <span id="saveStatus" style="font-size:.82rem;color:var(--muted);">Ikke gemt endnu</span>
-        <button class="secondary" id="logoutBtn">Log ud</button>
-      </div>
-      <p style="font-size:.8rem;color:var(--muted);margin:.4rem 0 0;">Dine data gemmes automatisk i Supabase et par sekunder efter hver ændring, og er tilgængelige fra alle enheder du logger ind på.</p>
-      <div class="btn-row" style="justify-content:flex-start;margin-top:.6rem;">
-        <button class="secondary" id="exportBtn">⬇️ Download kopi</button>
-        <button class="secondary" id="importBtn">📁 Importér / migrér fra fil</button>
-        <input type="file" id="importFileInput" accept=".json">
-      </div>
-    </div>
-
-    <div class="mapping" id="mappingBox">
-      <p>Kunne ikke gætte alle kolonner sikkert — tjek lige at det her passer med din fil:</p>
-      <div class="row">
-        <div class="field"><label>Dato</label><select id="mapDate"></select></div>
-        <div class="field"><label>Tekst / beskrivelse</label><select id="mapDesc"></select></div>
-        <div class="field"><label>Beløb</label><select id="mapAmount"></select></div>
-      </div>
-      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
-        <button id="applyMapping">Anvend</button>
-      </div>
     </div>
   </section>
 
@@ -802,7 +756,7 @@
     </div>
 
     <h2 style="margin-top:2rem;">Konti</h2>
-    <p class="lede">Konti tilføjes automatisk med deres kontonummer, når du indlæser en CSV-fil hvor du har skrevet kontonummeret i feltet "Kontonummer for denne fil" under Upload. Giv hver konto et navn her, så den vises som fx "Konto 6293791048 (Rune)" på posteringerne.</p>
+    <p class="lede">Konti tilføjes automatisk med deres kontonummer, når du indlæser en CSV-fil hvor du har skrevet kontonummeret i feltet "Kontonummer for denne fil" nedenfor. Giv hver konto et navn her, så den vises som fx "Konto 6293791048 (Rune)" på posteringerne.</p>
     <div class="rules-card">
       <div id="setupAccountsList"></div>
       <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
@@ -834,6 +788,44 @@
     <h2 style="margin-top:2rem;">Mulige dubletter</h2>
     <p class="lede">Posteringer med samme dato og beløb, men forskellig tekst — fx en intern overførsel set fra to konti. Slet den forkerte direkte herfra, eller markér gruppen som "ikke en dublet" for at skjule den.</p>
     <div class="rules-card" id="duplicateCandidatesBox"></div>
+
+    <h2 style="margin-top:2rem;">Hent eller indtast posteringer</h2>
+    <div class="upload-zone" id="dropZone">
+      <p><strong>Træk din CSV-fil herind</strong>, eller vælg den manuelt.</p>
+      <p>Filen behandles kun i din browser og sendes ingen steder hen. Du kan uploade flere filer fra forskellige konti — nye posteringer lægges til de eksisterende (dubletter springes automatisk over).</p>
+      <input type="text" id="accountLabel" placeholder="Kontonummer for denne fil (fx 6293791048) — navngives ovenfor under Konti" style="width:100%;max-width:360px;margin:.5rem auto 0;display:block;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;font-family:'Inter', sans-serif;font-size:.85rem;background:var(--bg-alt);color:var(--ink);">
+      <div class="btn-row">
+        <button id="pickFileBtn">Vælg CSV-fil</button>
+        <button class="secondary" id="demoBtn">Vis demo med eksempeldata</button>
+        <button class="secondary" id="resetBtn" style="display:none;">Nulstil alt</button>
+      </div>
+      <input type="file" id="fileInput" accept=".csv,.txt">
+    </div>
+
+    <div class="mapping" id="mappingBox">
+      <p>Kunne ikke gætte alle kolonner sikkert — tjek lige at det her passer med din fil:</p>
+      <div class="row">
+        <div class="field"><label>Dato</label><select id="mapDate"></select></div>
+        <div class="field"><label>Tekst / beskrivelse</label><select id="mapDesc"></select></div>
+        <div class="field"><label>Beløb</label><select id="mapAmount"></select></div>
+      </div>
+      <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;">
+        <button id="applyMapping">Anvend</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:2.5rem;">Gem, eksportér og importér</h2>
+    <div class="btn-row" style="justify-content:flex-start;margin-top:1rem;flex-wrap:wrap;align-items:center;gap:.6rem;">
+      <button id="saveDirectBtn">💾 Gem til Supabase</button>
+      <span id="saveStatus" style="font-size:.82rem;color:var(--muted);">Ikke gemt endnu</span>
+      <button class="secondary" id="logoutBtn">Log ud</button>
+    </div>
+    <p style="font-size:.8rem;color:var(--muted);margin:.4rem 0 0;">Dine data gemmes automatisk i Supabase et par sekunder efter hver ændring, og er tilgængelige fra alle enheder du logger ind på.</p>
+    <div class="btn-row" style="justify-content:flex-start;margin-top:.6rem;">
+      <button class="secondary" id="exportBtn">⬇️ Download kopi</button>
+      <button class="secondary" id="importBtn">📁 Importér / migrér fra fil</button>
+      <input type="file" id="importFileInput" accept=".json">
+    </div>
   </section>
 
   <footer>Dine data gemmes i Supabase og er tilgængelige fra alle enheder du logger ind på.</footer>
@@ -2097,7 +2089,7 @@ document.getElementById('tabNav').addEventListener('click', e => {
 function buildPersonNav(){
   const nav = document.getElementById('tabNav');
   nav.querySelectorAll('.person-tab-btn').forEach(b => b.remove());
-  let anchor = nav.querySelector('[data-tab="upload"]') || nav.querySelector('[data-tab="overblik"]');
+  let anchor = nav.querySelector('[data-tab="overblik"]');
   people.forEach(p => {
     const slug = SLUG[p.name];
     const btn = document.createElement('button');
