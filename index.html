@@ -648,6 +648,22 @@
       </div>
     </div>
 
+    <div style="margin-bottom:1.5rem;">
+      <span class="eyebrow">Opsparing fra før</span>
+      <h2>Ældre opsparing uden posteringer</h2>
+      <p class="lede">Sparede I op før appen havde posteringer for det (fx tidligere år)? Læg det oveni her — det tælles med i "opsparet i alt", men er ikke knyttet til en rigtig postering.</p>
+      <div class="rules-card" style="margin-bottom:1.5rem;">
+        <div id="loanManualSavingsList"></div>
+        <div class="modal-field-row loan-add-row" style="margin-top:1rem;">
+          <div class="modal-field"><label>Mærkat</label><input type="text" id="loanManualSavingLabel" placeholder="fx 2021-2023"></div>
+          <div class="modal-field"><label>Beløb (kr.)</label><input type="number" id="loanManualSavingAmount" min="0" step="1" placeholder="0"></div>
+        </div>
+        <div class="btn-row" style="justify-content:flex-start;">
+          <button type="button" class="secondary small" id="loanManualSavingAddBtn">+ Tilføj</button>
+        </div>
+      </div>
+    </div>
+
     <div class="kpi-row">
       <div class="kpi expense"><div class="eyebrow">Restgæld (kun det der er givet tilbage)</div><div class="val" id="loanKpiRemaining">0 kr.</div><div class="sub" id="loanKpiRemainingSub">–</div></div>
       <div class="kpi net"><div class="eyebrow">Ligger i opsparingen, ikke givet endnu</div><div class="val" id="loanKpiPending">0 kr.</div><div class="sub" id="loanKpiPendingSub">–</div></div>
@@ -1126,7 +1142,7 @@ let settings = {
 let ignoredFixedCandidates = new Set(); // normaliserede tekster brugeren har afvist som "fast udgift"-forslag
 let ignoredDuplicateGroups = new Set(); // dato+beløb-nøgler brugeren har markeret som "ikke en dublet"
 let yearBudgets = {}; // { "2027": { lines:[{id,kind,group,name,match,matchCategory,fast,note,months:[12]}] } }
-let loan = { principal: 0, category: '', repayments: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver }
+let loan = { principal: 0, category: '', repayments: [], manualSavings: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver, manualSavings: [{id,label,amount}] — opsparing fra før appen havde posteringer for det (fx ældre år), tastet ind manuelt }
 let abMode = 'budget'; // visning i Årsbudget-matrixen: budget | actual | diff
 let abEditing = null; // linjen der redigeres i Årsbudget-dialogen
 const BUDGET_MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
@@ -1579,18 +1595,34 @@ function renderLoan(){
   if(document.activeElement !== principalInput) principalInput.value = loan.principal || '';
 
   const matched = loanMatchedTx();
-  const savedTotal = matched.reduce((s,t) => s + Math.abs(t.amount), 0);
+  const manualSavingsTotal = loan.manualSavings.reduce((s,m) => s + (+m.amount || 0), 0);
+  const savedTotal = matched.reduce((s,t) => s + Math.abs(t.amount), 0) + manualSavingsTotal;
   const givenTotal = loan.repayments.reduce((s,r) => s + (+r.amount || 0), 0);
   const pending = Math.max(0, savedTotal - givenTotal);
   const remaining = Math.max(0, loan.principal - givenTotal);
-  const remainingWithSavings = Math.max(0, loan.principal - savedTotal);
+  // Tæl aldrig mindre krediteret end det der rent faktisk ER givet tilbage — "med opsparing" skal altid give samme eller mindre restgæld end "kun givet", aldrig mere.
+  const remainingWithSavings = Math.max(0, loan.principal - Math.max(savedTotal, givenTotal));
 
   setText('loanKpiRemaining', fmt(remaining));
   setText('loanKpiRemainingSub', 'af ' + fmt(loan.principal) + ' — givet tilbage: ' + fmt(givenTotal));
   setText('loanKpiPending', fmt(pending));
-  setText('loanKpiPendingSub', loan.category ? (matched.length ? 'opsparet i alt: ' + fmt(savedTotal) : 'ingen posteringer i kategorien endnu') : 'vælg en kategori ovenfor');
+  setText('loanKpiPendingSub', loan.category || manualSavingsTotal ? 'opsparet i alt: ' + fmt(savedTotal) + (manualSavingsTotal ? ' (heraf ' + fmt(manualSavingsTotal) + ' tilføjet manuelt)' : '') : 'vælg en kategori ovenfor');
   setText('loanKpiGiven', fmt(givenTotal));
   setText('loanKpiGivenSub', loan.repayments.length ? loan.repayments.length + ' overdragelse' + (loan.repayments.length===1?'':'r') : 'ingen endnu');
+
+  const manualListEl = document.getElementById('loanManualSavingsList');
+  if(!loan.manualSavings.length){
+    manualListEl.innerHTML = '<p class="lede" style="margin:0;">Ingen manuelle poster endnu.</p>';
+  } else {
+    manualListEl.innerHTML = loan.manualSavings.map(m => `
+      <div class="compare-row" data-id="${m.id}">
+        <span>${escAttr(m.label) || '(uden mærkat)'}</span>
+        <span style="display:flex;align-items:center;gap:.6rem;">
+          ${fmt(m.amount)}
+          <button type="button" class="icon-btn loan-manual-saving-remove" data-id="${m.id}" title="Slet">✕</button>
+        </span>
+      </div>`).join('');
+  }
 
   // Gennemsnitlig månedlig opsparingsrate, udledt af de faktiske posteringer (ikke en fast antagelse som i det gamle regneark)
   const months = new Set(matched.map(t => monthKey(t.date)));
@@ -1651,6 +1683,23 @@ document.getElementById('loanRepaymentsList').addEventListener('click', e => {
   renderAll();
 });
 document.getElementById('loanAddDate').value = toDateInputValue(new Date());
+document.getElementById('loanManualSavingAddBtn').addEventListener('click', () => {
+  const labelEl = document.getElementById('loanManualSavingLabel');
+  const amountEl = document.getElementById('loanManualSavingAmount');
+  const amount = +amountEl.value;
+  if(!amount || amount <= 0){ alert('Angiv et beløb større end 0.'); return; }
+  loan.manualSavings.push({ id: 'loanms'+Date.now()+Math.random().toString(36).slice(2,7), label: labelEl.value.trim(), amount });
+  labelEl.value = '';
+  amountEl.value = '';
+  renderAll();
+});
+document.getElementById('loanManualSavingsList').addEventListener('click', e => {
+  const btn = e.target.closest('.loan-manual-saving-remove');
+  if(!btn) return;
+  if(!confirm('Slet denne post?')) return;
+  loan.manualSavings = loan.manualSavings.filter(m => m.id !== btn.dataset.id);
+  renderAll();
+});
 
 /* ---------- Årsbudget: fane ---------- */
 function fmtN(n){ return new Intl.NumberFormat('da-DK', {maximumFractionDigits:0}).format(Math.round(n)); }
@@ -3391,10 +3440,11 @@ function loadPeopleFromImport(data){
     loan = {
       principal: +data.loan.principal || 0,
       category: String(data.loan.category || ''),
-      repayments: Array.isArray(data.loan.repayments) ? data.loan.repayments.map(r => ({id: String(r.id), date: String(r.date), amount: +r.amount || 0, note: String(r.note || '')})) : []
+      repayments: Array.isArray(data.loan.repayments) ? data.loan.repayments.map(r => ({id: String(r.id), date: String(r.date), amount: +r.amount || 0, note: String(r.note || '')})) : [],
+      manualSavings: Array.isArray(data.loan.manualSavings) ? data.loan.manualSavings.map(m => ({id: String(m.id), label: String(m.label || ''), amount: +m.amount || 0})) : []
     };
   } else {
-    loan = { principal: 0, category: '', repayments: [] };
+    loan = { principal: 0, category: '', repayments: [], manualSavings: [] };
   }
   ensureTransferCategory(); // ældre filer har ikke "Interne overførsler"-kategorien — tilføj den hvis den mangler
   syncSettingsUI();
