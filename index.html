@@ -800,6 +800,32 @@
     </div>
 
     <div style="margin-top:2rem;">
+      <span class="eyebrow">Grafer</span>
+      <h2>Visuelt overblik</h2>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">Udgifter pr. kategori</div>
+          <div style="position:relative;height:220px;"><canvas id="categoryChart-aarsoversigt"></canvas></div>
+          <div class="legend" id="categoryLegend-aarsoversigt"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Indtægter vs. udgifter pr. måned</div>
+          <div style="position:relative;height:220px;"><canvas id="monthChart-aarsoversigt"></canvas></div>
+          <div class="legend" id="monthLegend-aarsoversigt"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">År for år</div>
+          <div style="position:relative;height:220px;"><canvas id="yoCompareChart"></canvas></div>
+          <div class="legend" id="yoCompareLegend"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Saldo-udvikling (kumuleret) i <span id="yoCumulativeYearLabel"></span></div>
+          <div style="position:relative;height:220px;"><canvas id="yoCumulativeChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;">
       <span class="eyebrow">Kategorier</span>
       <h2>Fordeling af udgifter for året</h2>
       <div class="table-card">
@@ -1548,9 +1574,10 @@ function renderYearOverview(){
   setText('yoNetSub', net >= 0 ? 'i overskud' : 'i underskud');
 
   // Kategori-fordeling (netto pr. kategori, så returbeløb i samme kategori modregnes)
+  const sums = computeCategoryNetExpense(yearTotalsTx);
+  renderDoughnut('aarsoversigt', sums);
   const catBody = document.getElementById('yoCategoryBody');
   if(catBody){
-    const sums = computeCategoryNetExpense(yearTotalsTx);
     const netExpenseTotal = Object.values(sums).reduce((a,b) => a+b, 0);
     const cats = Object.keys(sums).sort((a,b) => sums[b]-sums[a]);
     if(!cats.length){
@@ -1565,18 +1592,71 @@ function renderYearOverview(){
   }
 
   // Måned for måned
+  renderMonthBar('aarsoversigt', computeGrossByMonth(yearTotalsTx));
   const monthBody = document.getElementById('yoMonthBody');
-  if(monthBody){
-    const rows = [];
-    for(let m = 0; m < 12; m++){
-      const monthTx = yearTotalsTx.filter(t => t.date.getMonth() === m);
-      if(!monthTx.length) continue;
-      const {income: mi, expense: me} = computeGrossTotals(monthTx);
-      const mn = mi - me;
-      rows.push(`<tr><td data-label="">${MONTH_NAMES_FULL[m]}</td><td data-label="Indtægter" style="text-align:right;">${fmt(mi)}</td><td data-label="Udgifter" style="text-align:right;">${fmt(me)}</td><td data-label="Netto" style="text-align:right;" class="${mn>=0?'amt-pos':'amt-neg'}">${(mn<0?'-':'')+fmt(Math.abs(mn))}</td></tr>`);
-    }
-    monthBody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="empty-note">Ingen data for dette år.</td></tr>';
+  const monthlyNet = []; // alle 12 måneder (også tomme, som 0) — bruges til den kumulerede saldo-graf herunder
+  const rows = [];
+  for(let m = 0; m < 12; m++){
+    const monthTx = yearTotalsTx.filter(t => t.date.getMonth() === m);
+    const {income: mi, expense: me} = computeGrossTotals(monthTx);
+    const mn = mi - me;
+    monthlyNet.push(mn);
+    if(!monthTx.length) continue;
+    rows.push(`<tr><td data-label="">${MONTH_NAMES_FULL[m]}</td><td data-label="Indtægter" style="text-align:right;">${fmt(mi)}</td><td data-label="Udgifter" style="text-align:right;">${fmt(me)}</td><td data-label="Netto" style="text-align:right;" class="${mn>=0?'amt-pos':'amt-neg'}">${(mn<0?'-':'')+fmt(Math.abs(mn))}</td></tr>`);
   }
+  if(monthBody) monthBody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="empty-note">Ingen data for dette år.</td></tr>';
+
+  renderYearCumulativeChart(selectedYear, monthlyNet);
+  renderYearCompareChart(sortedYears);
+}
+
+/* ---------- Årsoversigt: "År for år" — sammenligner indtægter/udgifter/netto på tværs af alle år med data ---------- */
+function renderYearCompareChart(years){
+  const canvas = document.getElementById('yoCompareChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  const key = 'yocompare';
+  if(charts[key]) charts[key].destroy();
+  const sorted = [...years].sort((a,b) => a-b);
+  const legend = document.getElementById('yoCompareLegend');
+  const incomeColor = isDark ? '#8FAF7C' : '#6A8759';
+  const expenseColor = isDark ? '#E08A6B' : '#D97757';
+  const netColor = isDark ? '#B08BC7' : '#8B5FA0';
+  const incomeData = [], expenseData = [], netData = [];
+  sorted.forEach(y => {
+    const tx = transactions.filter(t => t.date.getFullYear() === y && !isExcludedCategory(t.category));
+    const {income, expense} = computeGrossTotals(tx);
+    incomeData.push(income);
+    expenseData.push(expense);
+    netData.push(income - expense);
+  });
+  charts[key] = new Chart(canvas, {
+    type:'bar',
+    data:{ labels: sorted.map(String), datasets:[
+      { label:'Indtægter', data:incomeData, backgroundColor:incomeColor, borderRadius:4 },
+      { label:'Udgifter', data:expenseData, backgroundColor:expenseColor, borderRadius:4 },
+      { label:'Netto', data:netData, backgroundColor:netColor, borderRadius:4 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ ticks:{ callback:v=>fmt(v) } } }, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)}} } }
+  });
+  if(legend) legend.innerHTML = `<span><span class="dot" style="background:${incomeColor}"></span>Indtægter</span><span><span class="dot" style="background:${expenseColor}"></span>Udgifter</span><span><span class="dot" style="background:${netColor}"></span>Netto</span>`;
+}
+
+/* ---------- Årsoversigt: kumuleret saldo-udvikling hen over det valgte år (løbende sum af månedernes netto) ---------- */
+function renderYearCumulativeChart(year, monthlyNet){
+  const canvas = document.getElementById('yoCumulativeChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  setText('yoCumulativeYearLabel', String(year));
+  const key = 'yocumulative';
+  if(charts[key]) charts[key].destroy();
+  const monthNames = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  let running = 0;
+  const data = monthlyNet.map(mn => running += mn);
+  const lineColor = isDark ? '#8FAF7C' : '#6A8759';
+  charts[key] = new Chart(canvas, {
+    type:'line',
+    data:{ labels: monthNames, datasets:[{ label:'Kumuleret netto', data, borderColor:lineColor, backgroundColor:lineColor+'33', fill:true, tension:.25, pointRadius:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ ticks:{ callback:v=>fmt(v) } } }, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.raw)}} } }
+  });
 }
 document.getElementById('yoYear').addEventListener('change', renderYearOverview);
 
