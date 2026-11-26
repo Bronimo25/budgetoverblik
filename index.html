@@ -642,9 +642,10 @@
     <p class="lede">Overblik over lånet — restgæld, hvad der ligger og venter i opsparingen, og hvad der rent faktisk er givet videre.</p>
 
     <div class="rules-card" style="margin-bottom:1.5rem;">
-      <div class="modal-field-row">
+      <div class="modal-field-row loan-add-row">
         <div class="modal-field"><label>Hovedstol (kr.)</label><input type="number" id="loanPrincipal" min="0" step="1" placeholder="0"></div>
         <div class="modal-field"><label>Kategori der tæller som opsparing til lånet</label><select id="loanCategory"></select></div>
+        <div class="modal-field"><label>Fast månedlig rate til fremskrivning (kr.)</label><input type="number" id="loanMonthlyRate" min="0" step="1" placeholder="2000"></div>
       </div>
     </div>
 
@@ -673,7 +674,7 @@
     <div style="margin-top:2rem;">
       <span class="eyebrow">Fremskrivning</span>
       <h2>Betalt af om</h2>
-      <p class="lede">Baseret på den gennemsnitlige månedlige opsparing udledt af posteringerne i kategorien ovenfor.</p>
+      <p class="lede">Baseret på den faste månedlige rate sat ovenfor — "med opsparing" regner med, at det der ligger og venter i opsparingen gives fri til långiver med det samme.</p>
       <div class="rules-card">
         <div class="compare-row"><span>Kun det der er givet tilbage</span><span id="loanPayoffPlain">–</span></div>
         <div class="compare-row"><span>Hvis opsparingen også tælles med</span><span id="loanPayoffWithSavings">–</span></div>
@@ -1142,7 +1143,7 @@ let settings = {
 let ignoredFixedCandidates = new Set(); // normaliserede tekster brugeren har afvist som "fast udgift"-forslag
 let ignoredDuplicateGroups = new Set(); // dato+beløb-nøgler brugeren har markeret som "ikke en dublet"
 let yearBudgets = {}; // { "2027": { lines:[{id,kind,group,name,match,matchCategory,fast,note,months:[12]}] } }
-let loan = { principal: 0, category: '', repayments: [], manualSavings: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver, manualSavings: [{id,label,amount}] — opsparing fra før appen havde posteringer for det (fx ældre år), tastet ind manuelt }
+let loan = { principal: 0, category: '', monthlyRate: 2000, repayments: [], manualSavings: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, monthlyRate: fast månedligt afdrag brugt i "betalt af om"-fremskrivningen, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver, manualSavings: [{id,label,amount}] — opsparing fra før appen havde posteringer for det (fx ældre år), tastet ind manuelt }
 let abMode = 'budget'; // visning i Årsbudget-matrixen: budget | actual | diff
 let abEditing = null; // linjen der redigeres i Årsbudget-dialogen
 const BUDGET_MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
@@ -1593,6 +1594,8 @@ function renderLoan(){
   catSel.value = categories.some(c => c.name === loan.category) ? loan.category : '';
 
   if(document.activeElement !== principalInput) principalInput.value = loan.principal || '';
+  const rateInput = document.getElementById('loanMonthlyRate');
+  if(document.activeElement !== rateInput) rateInput.value = loan.monthlyRate || '';
 
   const matched = loanMatchedTx();
   const manualSavingsTotal = loan.manualSavings.reduce((s,m) => s + (+m.amount || 0), 0);
@@ -1624,13 +1627,12 @@ function renderLoan(){
       </div>`).join('');
   }
 
-  // Gennemsnitlig månedlig opsparingsrate, udledt af de faktiske posteringer (ikke en fast antagelse som i det gamle regneark)
-  const months = new Set(matched.map(t => monthKey(t.date)));
-  const avgPerMonth = months.size ? savedTotal / months.size : 0;
+  // Fremskrivningen bruger en fast månedlig rate (sat ovenfor) — ikke et gennemsnit udledt af posteringerne — så den regner med hvad I rent faktisk betaler af hver måned fremover.
+  const rate = loan.monthlyRate || 0;
   const payoffText = (amountLeft) => {
-    if(avgPerMonth <= 0) return 'Ukendt — ingen posteringer i kategorien endnu';
-    const monthsLeft = amountLeft / avgPerMonth;
-    return Math.round(monthsLeft) + ' måneder (ca. ' + (monthsLeft/12).toFixed(1).replace('.', ',') + ' år), ved ' + fmt(avgPerMonth) + '/md. i snit';
+    if(rate <= 0) return 'Angiv en månedlig rate ovenfor';
+    const monthsLeft = amountLeft / rate;
+    return Math.round(monthsLeft) + ' måneder (ca. ' + (monthsLeft/12).toFixed(1).replace('.', ',') + ' år), ved ' + fmt(rate) + '/md.';
   };
   setText('loanPayoffPlain', remaining <= 0 ? 'Betalt helt tilbage' : payoffText(remaining));
   setText('loanPayoffWithSavings', remainingWithSavings <= 0 ? 'Betalt helt tilbage' : payoffText(remainingWithSavings));
@@ -1662,6 +1664,10 @@ document.getElementById('loanPrincipal').addEventListener('change', e => {
 });
 document.getElementById('loanCategory').addEventListener('change', e => {
   loan.category = e.target.value;
+  renderAll();
+});
+document.getElementById('loanMonthlyRate').addEventListener('change', e => {
+  loan.monthlyRate = Math.max(0, +e.target.value || 0);
   renderAll();
 });
 document.getElementById('loanAddBtn').addEventListener('click', () => {
@@ -3440,11 +3446,12 @@ function loadPeopleFromImport(data){
     loan = {
       principal: +data.loan.principal || 0,
       category: String(data.loan.category || ''),
+      monthlyRate: +data.loan.monthlyRate || 2000,
       repayments: Array.isArray(data.loan.repayments) ? data.loan.repayments.map(r => ({id: String(r.id), date: String(r.date), amount: +r.amount || 0, note: String(r.note || '')})) : [],
       manualSavings: Array.isArray(data.loan.manualSavings) ? data.loan.manualSavings.map(m => ({id: String(m.id), label: String(m.label || ''), amount: +m.amount || 0})) : []
     };
   } else {
-    loan = { principal: 0, category: '', repayments: [], manualSavings: [] };
+    loan = { principal: 0, category: '', monthlyRate: 2000, repayments: [], manualSavings: [] };
   }
   ensureTransferCategory(); // ældre filer har ikke "Interne overførsler"-kategorien — tilføj den hvis den mangler
   syncSettingsUI();
