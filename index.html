@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Budgetoverblik</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#D97757">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Budget">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -384,6 +392,7 @@
       <!-- person-faner indsættes her af JS -->
       <button data-tab="fasteudgifter">Faste Udgifter</button>
       <button data-tab="laan">Lån</button>
+      <button data-tab="laangeneral">Lån (nyt)</button>
       <button data-tab="aarsbudget">Årsbudget</button>
       <button data-tab="kategorier">Kategorier</button>
       <button data-tab="aarsoversigt">Årsoversigt</button>
@@ -419,6 +428,15 @@
             <h2 style="margin:0;">Alle posteringer</h2>
           </div>
           <button id="addTxBtn">+ Tilføj postering manuelt</button>
+        </div>
+        <div style="margin-bottom:1rem;">
+          <div class="budget-row-top"><span>Godkendt</span><span id="reviewProgressText-overblik">–</span></div>
+          <div class="budget-bar"><div class="budget-bar-fill" id="reviewProgressFill-overblik" style="width:0%;background:var(--positive);"></div></div>
+        </div>
+        <div class="filter-row" style="margin-bottom:.6rem;">
+          <select id="filterPreset-overblik" style="max-width:220px;"><option value="">– Gemte filtre –</option></select>
+          <button type="button" class="secondary small" id="savePresetBtn-overblik">💾 Gem filter</button>
+          <button type="button" class="secondary small" id="deletePresetBtn-overblik" style="display:none;">🗑️ Slet valgt</button>
         </div>
         <div class="filter-row">
           <input type="text" id="search-overblik" placeholder="Søg i tekst eller beløb...">
@@ -563,6 +581,15 @@
     <div style="margin-top:2rem;">
       <span class="eyebrow">Detaljer</span>
       <h2>Alle faste udgifter i <span id="fuListYearLabel"></span></h2>
+      <div style="margin-bottom:1rem;">
+        <div class="budget-row-top"><span>Godkendt</span><span id="reviewProgressText-fu">–</span></div>
+        <div class="budget-bar"><div class="budget-bar-fill" id="reviewProgressFill-fu" style="width:0%;background:var(--positive);"></div></div>
+      </div>
+      <div class="filter-row" style="margin-bottom:.6rem;">
+        <select id="filterPreset-fu" style="max-width:220px;"><option value="">– Gemte filtre –</option></select>
+        <button type="button" class="secondary small" id="savePresetBtn-fu">💾 Gem filter</button>
+        <button type="button" class="secondary small" id="deletePresetBtn-fu" style="display:none;">🗑️ Slet valgt</button>
+      </div>
       <div class="filter-row">
         <input type="text" id="search-fu" placeholder="Søg i tekst eller beløb...">
         <select id="filterCategory-fu"><option value="">Alle kategorier</option></select>
@@ -708,6 +735,17 @@
         </table>
       </div>
     </div>
+  </section>
+
+  <!-- ===== LÅN (GENERALISERET, FLERE LÅN) ===== -->
+  <section class="tab-panel" id="tab-laangeneral">
+    <span class="eyebrow">Lån</span>
+    <h2>Lån &amp; afdrag</h2>
+    <p class="lede">Overblik over flere lån ad gangen — tilføj ét pr. långiver. Hvert lån udleder selv hvor meget der er opsparet, ud fra en valgt kategori, plus det I eventuelt lægger ind manuelt.</p>
+    <div class="btn-row" style="justify-content:flex-start;margin-bottom:1.5rem;">
+      <button type="button" id="addLoanBtn">+ Tilføj lån</button>
+    </div>
+    <div id="loansContainer"></div>
   </section>
 
   <!-- ===== KATEGORIER ===== -->
@@ -1157,6 +1195,7 @@ let modalOriginalCategory = null;
 let isDark = false;
 const dashboardCache = {};
 let filterState = {};
+let filterPresets = []; // gemte filter-kombinationer: [{id, prefix, name, filters:{search,category,person,month,year,account,reviewed}}]
 let sortState = {};
 
 /* ---------- Indstillinger (Setup) ---------- */
@@ -1170,6 +1209,7 @@ let ignoredFixedCandidates = new Set(); // normaliserede tekster brugeren har af
 let ignoredDuplicateGroups = new Set(); // dato+beløb-nøgler brugeren har markeret som "ikke en dublet"
 let yearBudgets = {}; // { "2027": { lines:[{id,kind,group,name,match,matchCategory,fast,note,months:[12]}] } }
 let loan = { principal: 0, category: '', monthlyRate: 2000, repayments: [], manualSavings: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, monthlyRate: fast månedligt afdrag brugt i "betalt af om"-fremskrivningen, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver, manualSavings: [{id,label,amount}] — opsparing fra før appen havde posteringer for det (fx ældre år), tastet ind manuelt }
+let loans = []; // generaliseret flere-lån-version: [{id,name,principal,category,monthlyRate,repayments:[{id,date,amount,note}],manualSavings:[{id,label,amount}]}] — samme form som "loan" ovenfor, bare flere af dem. Den gamle "loan" (Bedste lån) beholdes indtil videre ved siden af.
 let abMode = 'budget'; // visning i Årsbudget-matrixen: budget | actual | diff
 let abEditing = null; // linjen der redigeres i Årsbudget-dialogen
 const BUDGET_MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
@@ -1787,6 +1827,163 @@ document.getElementById('loanManualSavingsList').addEventListener('click', e => 
   renderAll();
 });
 
+/* ---------- Lån (generaliseret, flere lån ad gangen) — samme regnelogik som ovenfor, bare pr. lån i "loans"-arrayet ---------- */
+function loanCardHTML(l){
+  const matched = l.category ? transactions.filter(t => t.category === l.category).sort((a,b) => a.date - b.date) : [];
+  const manualSavingsTotal = l.manualSavings.reduce((s,m) => s + (+m.amount || 0), 0);
+  const savedTotal = matched.reduce((s,t) => s + Math.abs(t.amount), 0) + manualSavingsTotal;
+  const givenTotal = l.repayments.reduce((s,r) => s + (+r.amount || 0), 0);
+  const pending = Math.max(0, savedTotal - givenTotal);
+  const remaining = Math.max(0, l.principal - givenTotal);
+  const remainingWithSavings = Math.max(0, l.principal - Math.max(savedTotal, givenTotal));
+  const rate = l.monthlyRate || 0;
+  const payoffText = (amountLeft) => {
+    if(rate <= 0) return 'Angiv en månedlig rate';
+    const monthsLeft = amountLeft / rate;
+    return Math.round(monthsLeft) + ' måneder (ca. ' + (monthsLeft/12).toFixed(1).replace('.', ',') + ' år), ved ' + fmt(rate) + '/md.';
+  };
+  const catOptions = '<option value="">– Vælg kategori –</option>' + categories.map(c => `<option value="${escAttr(c.name)}" ${c.name===l.category?'selected':''}>${c.name}</option>`).join('');
+
+  const repaymentsHtml = !l.repayments.length
+    ? '<p class="lede" style="margin:0;">Ingen overdragelser registreret endnu.</p>'
+    : l.repayments.slice().sort((a,b) => a.date.localeCompare(b.date)).map(r => `
+      <div class="compare-row">
+        <span>${parseDateInput(r.date).toLocaleDateString('da-DK')}${r.note ? ' · '+escAttr(r.note) : ''}</span>
+        <span style="display:flex;align-items:center;gap:.6rem;">
+          ${fmt(r.amount)}
+          <button type="button" class="icon-btn" data-action="removeRepayment" data-loan="${l.id}" data-id="${r.id}" title="Slet">✕</button>
+        </span>
+      </div>`).join('');
+
+  const manualHtml = !l.manualSavings.length
+    ? '<p class="lede" style="margin:0;">Ingen manuelle poster endnu.</p>'
+    : l.manualSavings.map(m => `
+      <div class="compare-row">
+        <span>${escAttr(m.label) || '(uden mærkat)'}</span>
+        <span style="display:flex;align-items:center;gap:.6rem;">
+          ${fmt(m.amount)}
+          <button type="button" class="icon-btn" data-action="removeManualSaving" data-loan="${l.id}" data-id="${m.id}" title="Slet">✕</button>
+        </span>
+      </div>`).join('');
+
+  const txRows = !matched.length
+    ? `<tr><td colspan="3" class="empty-note">${l.category ? 'Ingen posteringer i denne kategori endnu.' : 'Vælg en kategori ovenfor.'}</td></tr>`
+    : matched.map(t => `<tr><td data-label="Dato">${t.date.toLocaleDateString('da-DK')}</td><td class="desc" data-label="Tekst">${t.desc}</td><td style="text-align:right;" data-label="Beløb">${fmt(Math.abs(t.amount))}</td></tr>`).join('');
+
+  return `
+  <div class="rules-card" style="margin-bottom:2rem;" data-loan-card="${l.id}">
+    <div class="btn-row" style="justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem;">
+      <input type="text" class="inline-edit" style="font-size:1.1rem;font-family:'Source Serif 4',serif;font-weight:600;max-width:320px;border-color:var(--line);" data-field="name" data-loan="${l.id}" value="${escAttr(l.name)}" placeholder="Navn på lånet">
+      <button type="button" class="danger small" data-action="removeLoan" data-loan="${l.id}">🗑️ Slet lån</button>
+    </div>
+    <div class="modal-field-row loan-add-row">
+      <div class="modal-field"><label>Hovedstol (kr.)</label><input type="number" min="0" step="1" data-field="principal" data-loan="${l.id}" value="${l.principal||''}" placeholder="0"></div>
+      <div class="modal-field"><label>Kategori der tæller som opsparing</label><select data-field="category" data-loan="${l.id}">${catOptions}</select></div>
+      <div class="modal-field"><label>Fast månedlig rate (kr.)</label><input type="number" min="0" step="1" data-field="monthlyRate" data-loan="${l.id}" value="${l.monthlyRate||''}" placeholder="2000"></div>
+    </div>
+
+    <div class="kpi-row" style="margin-top:1.25rem;">
+      <div class="kpi expense"><div class="eyebrow">Restgæld (kun givet tilbage)</div><div class="val">${fmt(remaining)}</div><div class="sub">af ${fmt(l.principal)} — givet: ${fmt(givenTotal)}</div></div>
+      <div class="kpi net"><div class="eyebrow">Ligger i opsparingen</div><div class="val">${fmt(pending)}</div><div class="sub">${l.category || manualSavingsTotal ? 'opsparet i alt: ' + fmt(savedTotal) : 'vælg en kategori'}</div></div>
+      <div class="kpi income"><div class="eyebrow">Givet videre i alt</div><div class="val">${fmt(givenTotal)}</div><div class="sub">${l.repayments.length} overdragelse${l.repayments.length===1?'':'r'}</div></div>
+    </div>
+
+    <div class="rules-card" style="margin-top:1.5rem;">
+      <div class="compare-row"><span>Kun det der er givet tilbage</span><span>${remaining<=0?'Betalt helt tilbage':payoffText(remaining)}</span></div>
+      <div class="compare-row"><span>Hvis opsparingen også tælles med</span><span>${remainingWithSavings<=0?'Betalt helt tilbage':payoffText(remainingWithSavings)}</span></div>
+    </div>
+
+    <div style="margin-top:1.5rem;">
+      <h3 style="font-size:.95rem;margin:0 0 .5rem;">Opsparing fra før (uden posteringer)</h3>
+      ${manualHtml}
+      <div class="modal-field-row loan-add-row" style="margin-top:.75rem;">
+        <div class="modal-field"><label>Mærkat</label><input type="text" data-field="manualLabel" data-loan="${l.id}" placeholder="fx 2021-2023"></div>
+        <div class="modal-field"><label>Beløb (kr.)</label><input type="number" min="0" step="1" data-field="manualAmount" data-loan="${l.id}" placeholder="0"></div>
+      </div>
+      <button type="button" class="secondary small" data-action="addManualSaving" data-loan="${l.id}" style="margin-top:.5rem;">+ Tilføj</button>
+    </div>
+
+    <div style="margin-top:1.5rem;">
+      <h3 style="font-size:.95rem;margin:0 0 .5rem;">Hvad er givet videre</h3>
+      ${repaymentsHtml}
+      <div class="modal-field-row loan-add-row" style="margin-top:.75rem;">
+        <div class="modal-field"><label>Dato</label><input type="date" data-field="repayDate" data-loan="${l.id}" value="${toDateInputValue(new Date())}"></div>
+        <div class="modal-field"><label>Beløb (kr.)</label><input type="number" min="0" step="1" data-field="repayAmount" data-loan="${l.id}" placeholder="0"></div>
+        <div class="modal-field"><label>Note</label><input type="text" data-field="repayNote" data-loan="${l.id}" placeholder="fx Kontant"></div>
+      </div>
+      <button type="button" class="secondary small" data-action="addRepayment" data-loan="${l.id}" style="margin-top:.5rem;">+ Tilføj</button>
+    </div>
+
+    <details style="margin-top:1.5rem;">
+      <summary style="cursor:pointer;font-size:.85rem;color:var(--muted);">Posteringer talt med i opsparingen (${matched.length})</summary>
+      <div class="table-card" style="margin-top:.75rem;">
+        <table><thead><tr><th>Dato</th><th>Tekst</th><th style="text-align:right;">Beløb</th></tr></thead><tbody>${txRows}</tbody></table>
+      </div>
+    </details>
+  </div>`;
+}
+function renderLoansGeneral(){
+  const container = document.getElementById('loansContainer');
+  if(!container) return;
+  container.innerHTML = loans.length ? loans.map(loanCardHTML).join('') : '<p class="lede">Ingen lån oprettet endnu. Klik "+ Tilføj lån" for at komme i gang.</p>';
+}
+document.getElementById('addLoanBtn').addEventListener('click', () => {
+  const name = prompt('Navn på lånet (fx "Bedste" eller "Billån"):', '');
+  if(name === null) return;
+  loans.push({ id:'loan'+Date.now()+Math.random().toString(36).slice(2,7), name: name.trim() || 'Nyt lån', principal:0, category:'', monthlyRate:2000, repayments:[], manualSavings:[] });
+  renderAll();
+});
+document.getElementById('loansContainer').addEventListener('change', e => {
+  const field = e.target.dataset.field;
+  const loanId = e.target.dataset.loan;
+  if(!field || !loanId) return;
+  const l = loans.find(x => x.id === loanId);
+  if(!l) return;
+  if(field === 'name') l.name = e.target.value.trim() || 'Lån';
+  else if(field === 'principal') l.principal = Math.max(0, +e.target.value || 0);
+  else if(field === 'category') l.category = e.target.value;
+  else if(field === 'monthlyRate') l.monthlyRate = Math.max(0, +e.target.value || 0);
+  else return;
+  renderAll();
+});
+document.getElementById('loansContainer').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  const loanId = btn.dataset.loan;
+  const l = loans.find(x => x.id === loanId);
+  if(!l) return;
+  const card = btn.closest('[data-loan-card]');
+  const action = btn.dataset.action;
+  if(action === 'removeLoan'){
+    if(!confirm('Slet lånet "'+l.name+'"? Dette kan ikke fortrydes.')) return;
+    loans = loans.filter(x => x.id !== loanId);
+    renderAll();
+  } else if(action === 'addRepayment'){
+    const dateEl = card.querySelector('[data-field="repayDate"]');
+    const amountEl = card.querySelector('[data-field="repayAmount"]');
+    const noteEl = card.querySelector('[data-field="repayNote"]');
+    const amount = +amountEl.value;
+    if(!dateEl.value || !amount || amount <= 0){ alert('Angiv både dato og et beløb større end 0.'); return; }
+    l.repayments.push({ id:'rp'+Date.now()+Math.random().toString(36).slice(2,7), date:dateEl.value, amount, note:noteEl.value.trim() });
+    renderAll();
+  } else if(action === 'removeRepayment'){
+    if(!confirm('Slet denne overdragelse?')) return;
+    l.repayments = l.repayments.filter(r => r.id !== btn.dataset.id);
+    renderAll();
+  } else if(action === 'addManualSaving'){
+    const labelEl = card.querySelector('[data-field="manualLabel"]');
+    const amountEl = card.querySelector('[data-field="manualAmount"]');
+    const amount = +amountEl.value;
+    if(!amount || amount <= 0){ alert('Angiv et beløb større end 0.'); return; }
+    l.manualSavings.push({ id:'ms'+Date.now()+Math.random().toString(36).slice(2,7), label:labelEl.value.trim(), amount });
+    renderAll();
+  } else if(action === 'removeManualSaving'){
+    if(!confirm('Slet denne post?')) return;
+    l.manualSavings = l.manualSavings.filter(m => m.id !== btn.dataset.id);
+    renderAll();
+  }
+});
+
 /* ---------- Årsbudget: fane ---------- */
 function fmtN(n){ return new Intl.NumberFormat('da-DK', {maximumFractionDigits:0}).format(Math.round(n)); }
 function fmtSigned(n){ const r = Math.round(n); if(r === 0) return '–'; return (r > 0 ? '+' : '−') + fmtN(Math.abs(r)); }
@@ -2183,6 +2380,15 @@ function personTabHTML(person){
     <div style="margin-top:2rem;">
       <span class="eyebrow">Detaljer</span>
       <h2>Posteringer der vedrører ${person}</h2>
+      <div style="margin-bottom:1rem;">
+        <div class="budget-row-top"><span>Godkendt</span><span id="reviewProgressText-${slug}">–</span></div>
+        <div class="budget-bar"><div class="budget-bar-fill" id="reviewProgressFill-${slug}" style="width:0%;background:var(--positive);"></div></div>
+      </div>
+      <div class="filter-row" style="margin-bottom:.6rem;">
+        <select id="filterPreset-${slug}" style="max-width:220px;"><option value="">– Gemte filtre –</option></select>
+        <button type="button" class="secondary small" id="savePresetBtn-${slug}">💾 Gem filter</button>
+        <button type="button" class="secondary small" id="deletePresetBtn-${slug}" style="display:none;">🗑️ Slet valgt</button>
+      </div>
       <div class="filter-row">
         <input type="text" id="search-${slug}" placeholder="Søg i tekst eller beløb...">
         <select id="filterCategory-${slug}"><option value="">Alle kategorier</option></select>
@@ -2295,6 +2501,64 @@ function wireFilterControls(prefix, defaultCurrentYear){
   if(account) account.addEventListener('change', () => { getFilterState(prefix).account = account.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
   if(reviewed) reviewed.addEventListener('change', () => { getFilterState(prefix).reviewed = reviewed.value; resetTableShowAll(prefix); applyTableFilters(prefix); });
 }
+
+/* ---------- Gemte filter-kombinationer: husk en navngivet kombination af filtre pr. tabel, og hent den frem igen med ét klik ---------- */
+const FILTER_KEYS = ['search','category','person','month','year','account','reviewed'];
+const FILTER_EL_PREFIX = {search:'search-', category:'filterCategory-', person:'filterPerson-', month:'filterMonth-', year:'filterYear-', account:'filterAccount-', reviewed:'filterReviewed-'};
+function applyFilterPreset(prefix, filters){
+  const st = getFilterState(prefix);
+  FILTER_KEYS.forEach(k => { st[k] = filters[k] || ''; });
+  FILTER_KEYS.forEach(k => {
+    const el = document.getElementById(FILTER_EL_PREFIX[k]+prefix);
+    if(el) el.value = st[k];
+  });
+  resetTableShowAll(prefix);
+  // Året styrer også KPI'er/grafer, så genkør hele dashboardet, ligesom når man selv skifter år i dropdownen.
+  const cache = dashboardCache[prefix];
+  if(cache) renderDashboard(prefix, cache.txList, cache.amountFn, cache.person);
+  else applyTableFilters(prefix);
+}
+function populateFilterPresetSelect(prefix){
+  const sel = document.getElementById('filterPreset-'+prefix);
+  if(!sel) return;
+  const cur = sel.value;
+  const list = filterPresets.filter(p => p.prefix === prefix);
+  sel.innerHTML = '<option value="">– Gemte filtre –</option>' + list.map(p => `<option value="${p.id}">${escAttr(p.name)}</option>`).join('');
+  sel.value = list.some(p => p.id === cur) ? cur : '';
+  const delBtn = document.getElementById('deletePresetBtn-'+prefix);
+  if(delBtn) delBtn.style.display = sel.value ? 'inline-block' : 'none';
+}
+function renderFilterPresets(){
+  BULK_PREFIXES.forEach(populateFilterPresetSelect);
+}
+function wireFilterPresetControls(prefix){
+  const sel = document.getElementById('filterPreset-'+prefix);
+  if(!sel) return;
+  populateFilterPresetSelect(prefix);
+  sel.addEventListener('change', () => {
+    const delBtn = document.getElementById('deletePresetBtn-'+prefix);
+    const preset = filterPresets.find(p => p.id === sel.value);
+    if(delBtn) delBtn.style.display = preset ? 'inline-block' : 'none';
+    if(preset) applyFilterPreset(prefix, preset.filters);
+  });
+  const saveBtn = document.getElementById('savePresetBtn-'+prefix);
+  if(saveBtn) saveBtn.addEventListener('click', () => {
+    const name = prompt('Navn på det gemte filter (fx "Ikke-godkendte i år"):', '');
+    if(name === null || !name.trim()) return;
+    filterPresets.push({ id:'preset'+Date.now()+Math.random().toString(36).slice(2,7), prefix, name: name.trim(), filters: {...getFilterState(prefix)} });
+    populateFilterPresetSelect(prefix);
+    scheduleAutosave();
+  });
+  const delBtn = document.getElementById('deletePresetBtn-'+prefix);
+  if(delBtn) delBtn.addEventListener('click', () => {
+    const preset = filterPresets.find(p => p.id === sel.value);
+    if(!preset) return;
+    if(!confirm('Slet det gemte filter "'+preset.name+'"?')) return;
+    filterPresets = filterPresets.filter(p => p.id !== preset.id);
+    populateFilterPresetSelect(prefix);
+    scheduleAutosave();
+  });
+}
 function updateSortArrows(prefix, tableEl){
   const st = getSortState(prefix);
   tableEl.querySelectorAll('th[data-sort]').forEach(th => {
@@ -2348,8 +2612,10 @@ function applyTableFilters(prefix){
 }
 
 wireFilterControls('overblik', true);
+wireFilterPresetControls('overblik');
 attachSortHandlers('overblik', document.querySelector('#tab-overblik table'));
 wireFilterControls('fu');
+wireFilterPresetControls('fu');
 attachSortHandlers('fu', document.getElementById('fuDetailTable'));
 const fuYearSel = document.getElementById('fuYear');
 if(fuYearSel) fuYearSel.addEventListener('change', renderFasteUdgifter);
@@ -2414,6 +2680,7 @@ function buildPersonPanels(){
     slot.appendChild(panel);
     document.getElementById('addBtn-'+slug).addEventListener('click', () => openModal(null, p.name));
     wireFilterControls(slug, true);
+    wireFilterPresetControls(slug);
     attachSortHandlers(slug, panel.querySelector('table'));
     registerBulkPrefix(slug);
     wireBulkToolbar(slug);
@@ -2778,11 +3045,35 @@ function renderTable(prefix, txList, person, amountFn){
   if(showBulk) body.querySelectorAll('textarea.note-edit').forEach(el => { if(el.value) autoResizeTextarea(el); });
 }
 
+// Let genberegning af godkendt-fremdragsbjælken alene, ud fra det der allerede ligger i dashboardCache — bruges når ét enkelt godkendt-flueben tastes (som ellers bevidst springer en fuld renderAll over for at forblive responsivt).
+function refreshReviewProgress(prefix){
+  const cache = dashboardCache[prefix];
+  const fillEl = document.getElementById('reviewProgressFill-'+prefix);
+  if(!cache || !fillEl) return;
+  const yearFilter = getFilterState(prefix).year;
+  const scopedList = yearFilter ? cache.txList.filter(t => String(t.date.getFullYear()) === yearFilter) : cache.txList;
+  const reviewedCount = scopedList.filter(t => t.reviewed).length;
+  const reviewTotal = scopedList.length;
+  const reviewPct = reviewTotal ? Math.round(reviewedCount/reviewTotal*100) : 0;
+  fillEl.style.width = reviewPct + '%';
+  setText('reviewProgressText-'+prefix, reviewTotal ? reviewedCount + ' af ' + reviewTotal + ' (' + reviewPct + '%)' : 'Ingen posteringer endnu');
+}
 function renderDashboard(prefix, txList, amountFn, person){
   // KPI'er og grafer følger det valgte år (hvis et er valgt) — ikke kun selve listen — så toppen af siden og posteringerne nedenunder altid stemmer overens.
   const yearFilter = getFilterState(prefix).year;
   const scopedList = yearFilter ? txList.filter(t => String(t.date.getFullYear()) === yearFilter) : txList;
   const totalsList = scopedList.filter(t => !isExcludedCategory(t.category));
+
+  // Godkendt-fremdrift: hvor mange af de posteringer der er i scope (alle kategorier, også "ude af total") er markeret godkendt
+  const reviewFill = document.getElementById('reviewProgressFill-'+prefix);
+  if(reviewFill){
+    const reviewedCount = scopedList.filter(t => t.reviewed).length;
+    const reviewTotal = scopedList.length;
+    const reviewPct = reviewTotal ? Math.round(reviewedCount/reviewTotal*100) : 0;
+    reviewFill.style.width = reviewPct + '%';
+    setText('reviewProgressText-'+prefix, reviewTotal ? reviewedCount + ' af ' + reviewTotal + ' (' + reviewPct + '%)' : 'Ingen posteringer endnu');
+  }
+
   const {income, expense} = computeGrossTotals(totalsList, amountFn);
   setText('kpiExpense-'+prefix, fmt(expense));
   setText('kpiExpenseSub-'+prefix, totalsList.length ? totalsList.filter(t=>amountFn(t)<0).length + ' posteringer' : '–');
@@ -2966,6 +3257,8 @@ function renderAll(){
   renderYearOverview();
   renderAarsbudget();
   renderLoan();
+  renderLoansGeneral();
+  renderFilterPresets();
   renderFixedCandidates();
   renderDuplicateCandidates();
   updateStamp();
@@ -3162,7 +3455,7 @@ function wireBulkToolbar(prefix){
     }
     if(e.target.classList.contains('reviewed-edit')){
       const t = id ? transactions.find(x => x.id === id) : null;
-      if(t){ t.reviewed = e.target.checked; scheduleAutosave(); }
+      if(t){ t.reviewed = e.target.checked; refreshReviewProgress(prefix); scheduleAutosave(); }
       return;
     }
     const t = id ? transactions.find(x => x.id === id) : null;
@@ -3497,6 +3790,8 @@ function currentExportData(){
     ignoredDuplicateGroups: [...ignoredDuplicateGroups],
     yearBudgets: JSON.parse(JSON.stringify(yearBudgets)),
     loan: JSON.parse(JSON.stringify(loan)),
+    loans: JSON.parse(JSON.stringify(loans)),
+    filterPresets: JSON.parse(JSON.stringify(filterPresets)),
     transactions: transactions.map(t => ({...t, note: t.note||'', date: t.date.toISOString()}))
   };
 }
@@ -3533,6 +3828,17 @@ function loadPeopleFromImport(data){
   } else {
     loan = { principal: 0, category: '', monthlyRate: 2000, repayments: [], manualSavings: [] };
   }
+  // Flere lån (generaliseret version). Ældre filer har ingen loans-nøgle — start tom i så fald
+  loans = Array.isArray(data.loans) ? data.loans.map(l => ({
+    id: String(l.id),
+    name: String(l.name || 'Lån'),
+    principal: +l.principal || 0,
+    category: String(l.category || ''),
+    monthlyRate: +l.monthlyRate || 2000,
+    repayments: Array.isArray(l.repayments) ? l.repayments.map(r => ({id: String(r.id), date: String(r.date), amount: +r.amount || 0, note: String(r.note || '')})) : [],
+    manualSavings: Array.isArray(l.manualSavings) ? l.manualSavings.map(m => ({id: String(m.id), label: String(m.label || ''), amount: +m.amount || 0})) : []
+  })) : [];
+  filterPresets = Array.isArray(data.filterPresets) ? data.filterPresets.map(p => ({id: String(p.id), prefix: String(p.prefix || ''), name: String(p.name || ''), filters: {...(p.filters || {})}})) : [];
   ensureTransferCategory(); // ældre filer har ikke "Interne overførsler"-kategorien — tilføj den hvis den mangler
   syncSettingsUI();
   // Bagudkompatibilitet: konti der optræder i posteringerne, men ikke i accounts-listen, registreres automatisk
@@ -3963,6 +4269,13 @@ document.getElementById('demoBtn').addEventListener('click', () => {
   document.getElementById('resetBtn').style.display = 'inline-block';
   rebuildPeopleUI();
 });
+
+/* ---------- PWA: gør appen installerbar (hjemmeskærm/app-ikon) ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.error('Service worker-registrering fejlede:', err));
+  });
+}
 </script>
 
 </body>
