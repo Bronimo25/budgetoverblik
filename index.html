@@ -300,6 +300,9 @@
   .modal-field input[type=checkbox]{width:auto;}
   .modal-field.checkbox-field label{display:flex;align-items:center;gap:.55rem;cursor:pointer;font-size:.85rem;color:var(--ink);}
   .modal-field-row{display:flex;gap:.75rem;}
+  @media (max-width:480px){
+    .modal-field-row.loan-add-row{flex-direction:column;gap:.9rem;}
+  }
   .modal-field-row .modal-field{flex:1;}
   .assign-row{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;}
   .assign-row label{flex:1;font-size:.85rem;display:flex;align-items:center;gap:.5rem;margin:0;color:var(--ink);}
@@ -380,6 +383,7 @@
       <button data-tab="overblik" class="active">Overblik</button>
       <!-- person-faner indsættes her af JS -->
       <button data-tab="fasteudgifter">Faste Udgifter</button>
+      <button data-tab="laan">Lån</button>
       <button data-tab="aarsbudget">Årsbudget</button>
       <button data-tab="kategorier">Kategorier</button>
       <button data-tab="aarsoversigt">Årsoversigt</button>
@@ -626,6 +630,64 @@
         <table id="fuDetailTable">
           <thead><tr><th class="tx-select-cell"><input type="checkbox" id="selectAllTx-fu" title="Vælg alle"></th><th data-sort="date">Dato</th><th data-sort="desc">Tekst</th><th>Note</th><th>Person(er)</th><th data-sort="category">Kategori</th><th style="text-align:right;" data-sort="amount">Beløb</th><th></th><th class="tx-review-cell" title="Godkendt">✓</th></tr></thead>
           <tbody id="txBody-fu"><tr><td colspan="9" class="empty-note">Ingen faste udgifter for dette år endnu.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LÅN ===== -->
+  <section class="tab-panel" id="tab-laan">
+    <span class="eyebrow">Lån</span>
+    <h2>Bedste lån</h2>
+    <p class="lede">Overblik over lånet — restgæld, hvad der ligger og venter i opsparingen, og hvad der rent faktisk er givet videre.</p>
+
+    <div class="rules-card" style="margin-bottom:1.5rem;">
+      <div class="modal-field-row">
+        <div class="modal-field"><label>Hovedstol (kr.)</label><input type="number" id="loanPrincipal" min="0" step="1" placeholder="0"></div>
+        <div class="modal-field"><label>Kategori der tæller som opsparing til lånet</label><select id="loanCategory"></select></div>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi expense"><div class="eyebrow">Restgæld (kun det der er givet tilbage)</div><div class="val" id="loanKpiRemaining">0 kr.</div><div class="sub" id="loanKpiRemainingSub">–</div></div>
+      <div class="kpi net"><div class="eyebrow">Ligger i opsparingen, ikke givet endnu</div><div class="val" id="loanKpiPending">0 kr.</div><div class="sub" id="loanKpiPendingSub">–</div></div>
+      <div class="kpi income"><div class="eyebrow">Givet videre i alt</div><div class="val" id="loanKpiGiven">0 kr.</div><div class="sub" id="loanKpiGivenSub">–</div></div>
+    </div>
+
+    <div style="margin-top:2rem;">
+      <span class="eyebrow">Fremskrivning</span>
+      <h2>Betalt af om</h2>
+      <p class="lede">Baseret på den gennemsnitlige månedlige opsparing udledt af posteringerne i kategorien ovenfor.</p>
+      <div class="rules-card">
+        <div class="compare-row"><span>Kun det der er givet tilbage</span><span id="loanPayoffPlain">–</span></div>
+        <div class="compare-row"><span>Hvis opsparingen også tælles med</span><span id="loanPayoffWithSavings">–</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;">
+      <span class="eyebrow">Overdraget</span>
+      <h2>Hvad er givet videre</h2>
+      <p class="lede">Registrér her når I fysisk har overdraget penge fra opsparingen — det er ikke en bankoverførsel, så det kommer ikke automatisk fra posteringerne.</p>
+      <div class="rules-card">
+        <div id="loanRepaymentsList"></div>
+        <div class="modal-field-row loan-add-row" style="margin-top:1rem;">
+          <div class="modal-field"><label>Dato</label><input type="date" id="loanAddDate"></div>
+          <div class="modal-field"><label>Beløb (kr.)</label><input type="number" id="loanAddAmount" min="0" step="1" placeholder="0"></div>
+          <div class="modal-field"><label>Note</label><input type="text" id="loanAddNote" placeholder="fx Kontant"></div>
+        </div>
+        <div class="btn-row" style="justify-content:flex-start;">
+          <button type="button" class="secondary small" id="loanAddBtn">+ Tilføj</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;">
+      <span class="eyebrow">Gennemsigtighed</span>
+      <h2>Posteringer talt med i opsparingen</h2>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Dato</th><th>Tekst</th><th style="text-align:right;">Beløb</th></tr></thead>
+          <tbody id="loanTxBody"></tbody>
         </table>
       </div>
     </div>
@@ -1064,6 +1126,7 @@ let settings = {
 let ignoredFixedCandidates = new Set(); // normaliserede tekster brugeren har afvist som "fast udgift"-forslag
 let ignoredDuplicateGroups = new Set(); // dato+beløb-nøgler brugeren har markeret som "ikke en dublet"
 let yearBudgets = {}; // { "2027": { lines:[{id,kind,group,name,match,matchCategory,fast,note,months:[12]}] } }
+let loan = { principal: 0, category: '', repayments: [] }; // { principal: hovedstol, category: hvilken kategori der tæller som opsparing til lånet, repayments: [{id,date,amount,note}] — det der rent faktisk er givet/overdraget til långiver }
 let abMode = 'budget'; // visning i Årsbudget-matrixen: budget | actual | diff
 let abEditing = null; // linjen der redigeres i Årsbudget-dialogen
 const BUDGET_MONTHS = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
@@ -1499,6 +1562,95 @@ function renderYearOverview(){
   }
 }
 document.getElementById('yoYear').addEventListener('change', renderYearOverview);
+
+/* ---------- Lån (fx "Bedste lån"): hovedstol + en valgt kategori der automatisk tælles som opsparing, og en manuel log over hvad der rent faktisk er givet videre ---------- */
+function loanMatchedTx(){
+  if(!loan.category) return [];
+  return transactions.filter(t => t.category === loan.category).sort((a,b) => a.date - b.date);
+}
+function renderLoan(){
+  const principalInput = document.getElementById('loanPrincipal');
+  if(!principalInput) return;
+
+  const catSel = document.getElementById('loanCategory');
+  catSel.innerHTML = '<option value="">– Vælg kategori –</option>' + categories.map(c => `<option value="${escAttr(c.name)}">${c.name}</option>`).join('');
+  catSel.value = categories.some(c => c.name === loan.category) ? loan.category : '';
+
+  if(document.activeElement !== principalInput) principalInput.value = loan.principal || '';
+
+  const matched = loanMatchedTx();
+  const savedTotal = matched.reduce((s,t) => s + Math.abs(t.amount), 0);
+  const givenTotal = loan.repayments.reduce((s,r) => s + (+r.amount || 0), 0);
+  const pending = Math.max(0, savedTotal - givenTotal);
+  const remaining = Math.max(0, loan.principal - givenTotal);
+  const remainingWithSavings = Math.max(0, loan.principal - savedTotal);
+
+  setText('loanKpiRemaining', fmt(remaining));
+  setText('loanKpiRemainingSub', 'af ' + fmt(loan.principal) + ' — givet tilbage: ' + fmt(givenTotal));
+  setText('loanKpiPending', fmt(pending));
+  setText('loanKpiPendingSub', loan.category ? (matched.length ? 'opsparet i alt: ' + fmt(savedTotal) : 'ingen posteringer i kategorien endnu') : 'vælg en kategori ovenfor');
+  setText('loanKpiGiven', fmt(givenTotal));
+  setText('loanKpiGivenSub', loan.repayments.length ? loan.repayments.length + ' overdragelse' + (loan.repayments.length===1?'':'r') : 'ingen endnu');
+
+  // Gennemsnitlig månedlig opsparingsrate, udledt af de faktiske posteringer (ikke en fast antagelse som i det gamle regneark)
+  const months = new Set(matched.map(t => monthKey(t.date)));
+  const avgPerMonth = months.size ? savedTotal / months.size : 0;
+  const payoffText = (amountLeft) => {
+    if(avgPerMonth <= 0) return 'Ukendt — ingen posteringer i kategorien endnu';
+    const monthsLeft = amountLeft / avgPerMonth;
+    return Math.round(monthsLeft) + ' måneder (ca. ' + (monthsLeft/12).toFixed(1).replace('.', ',') + ' år), ved ' + fmt(avgPerMonth) + '/md. i snit';
+  };
+  setText('loanPayoffPlain', remaining <= 0 ? 'Betalt helt tilbage' : payoffText(remaining));
+  setText('loanPayoffWithSavings', remainingWithSavings <= 0 ? 'Betalt helt tilbage' : payoffText(remainingWithSavings));
+
+  const listEl = document.getElementById('loanRepaymentsList');
+  if(!loan.repayments.length){
+    listEl.innerHTML = '<p class="lede" style="margin:0;">Ingen overdragelser registreret endnu.</p>';
+  } else {
+    listEl.innerHTML = loan.repayments.slice().sort((a,b) => a.date.localeCompare(b.date)).map(r => `
+      <div class="compare-row" data-id="${r.id}">
+        <span>${parseDateInput(r.date).toLocaleDateString('da-DK')}${r.note ? ' · '+escAttr(r.note) : ''}</span>
+        <span style="display:flex;align-items:center;gap:.6rem;">
+          ${fmt(r.amount)}
+          <button type="button" class="icon-btn loan-repayment-remove" data-id="${r.id}" title="Slet">✕</button>
+        </span>
+      </div>`).join('');
+  }
+
+  const txBody = document.getElementById('loanTxBody');
+  if(!matched.length){
+    txBody.innerHTML = `<tr><td colspan="3" class="empty-note">${loan.category ? 'Ingen posteringer i denne kategori endnu.' : 'Vælg en kategori ovenfor.'}</td></tr>`;
+  } else {
+    txBody.innerHTML = matched.map(t => `<tr><td data-label="Dato">${t.date.toLocaleDateString('da-DK')}</td><td class="desc" data-label="Tekst">${t.desc}</td><td style="text-align:right;" data-label="Beløb">${fmt(Math.abs(t.amount))}</td></tr>`).join('');
+  }
+}
+document.getElementById('loanPrincipal').addEventListener('change', e => {
+  loan.principal = Math.max(0, +e.target.value || 0);
+  renderAll();
+});
+document.getElementById('loanCategory').addEventListener('change', e => {
+  loan.category = e.target.value;
+  renderAll();
+});
+document.getElementById('loanAddBtn').addEventListener('click', () => {
+  const dateEl = document.getElementById('loanAddDate');
+  const amountEl = document.getElementById('loanAddAmount');
+  const noteEl = document.getElementById('loanAddNote');
+  const amount = +amountEl.value;
+  if(!dateEl.value || !amount || amount <= 0){ alert('Angiv både dato og et beløb større end 0.'); return; }
+  loan.repayments.push({ id: 'loanrp'+Date.now()+Math.random().toString(36).slice(2,7), date: dateEl.value, amount, note: noteEl.value.trim() });
+  amountEl.value = '';
+  noteEl.value = '';
+  renderAll();
+});
+document.getElementById('loanRepaymentsList').addEventListener('click', e => {
+  const btn = e.target.closest('.loan-repayment-remove');
+  if(!btn) return;
+  if(!confirm('Slet denne overdragelse?')) return;
+  loan.repayments = loan.repayments.filter(r => r.id !== btn.dataset.id);
+  renderAll();
+});
+document.getElementById('loanAddDate').value = toDateInputValue(new Date());
 
 /* ---------- Årsbudget: fane ---------- */
 function fmtN(n){ return new Intl.NumberFormat('da-DK', {maximumFractionDigits:0}).format(Math.round(n)); }
@@ -2678,6 +2830,7 @@ function renderAll(){
   renderFasteUdgifter();
   renderYearOverview();
   renderAarsbudget();
+  renderLoan();
   renderFixedCandidates();
   renderDuplicateCandidates();
   updateStamp();
@@ -3199,7 +3352,7 @@ document.getElementById('bpSave').addEventListener('click', () => {
 /* ---------- Gem / indlæs som fil ---------- */
 function currentExportData(){
   return {
-    version: 6,
+    version: 7,
     exportedAt: new Date().toISOString(),
     people: people.map(p => ({name:p.name, color:p.color})),
     categories,
@@ -3208,6 +3361,7 @@ function currentExportData(){
     ignoredFixedCandidates: [...ignoredFixedCandidates],
     ignoredDuplicateGroups: [...ignoredDuplicateGroups],
     yearBudgets: JSON.parse(JSON.stringify(yearBudgets)),
+    loan: JSON.parse(JSON.stringify(loan)),
     transactions: transactions.map(t => ({...t, note: t.note||'', date: t.date.toISOString()}))
   };
 }
@@ -3232,6 +3386,16 @@ function loadPeopleFromImport(data){
   // Årsbudget (version 6+). Ældre filer: flyt eventuelle kategori-budgetter (Budget/md) over i indeværende års budget
   if(data.yearBudgets && typeof data.yearBudgets === 'object'){ yearBudgets = sanitizeYearBudgets(data.yearBudgets); }
   else { yearBudgets = {}; migrateLegacyCategoryBudgets(); }
+  // Lån (version 7+). Ældre filer har ingen loan-nøgle — behold tomt udgangspunkt i så fald
+  if(data.loan && typeof data.loan === 'object'){
+    loan = {
+      principal: +data.loan.principal || 0,
+      category: String(data.loan.category || ''),
+      repayments: Array.isArray(data.loan.repayments) ? data.loan.repayments.map(r => ({id: String(r.id), date: String(r.date), amount: +r.amount || 0, note: String(r.note || '')})) : []
+    };
+  } else {
+    loan = { principal: 0, category: '', repayments: [] };
+  }
   ensureTransferCategory(); // ældre filer har ikke "Interne overførsler"-kategorien — tilføj den hvis den mangler
   syncSettingsUI();
   // Bagudkompatibilitet: konti der optræder i posteringerne, men ikke i accounts-listen, registreres automatisk
